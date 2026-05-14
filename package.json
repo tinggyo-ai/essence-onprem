@@ -1,0 +1,12 @@
+{
+  "name": "essence-on",
+  "version": "1.0.0",
+  "description": "Essence On AI 업무 어시스턴트",
+  "main": "main.js",
+  "scripts": {
+    "start": ".\\node_modules\\.bin\\electron.cmd ."
+  },
+  "devDependencies": {
+    "electron": "^35.0.0"
+  }
+}

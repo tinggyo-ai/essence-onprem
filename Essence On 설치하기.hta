@@ -1,0 +1,495 @@
+﻿﻿﻿<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<meta http-equiv="x-ua-compatible" content="ie=11"/>
+<title>Essence On 설치</title>
+<hta:application
+    id="oHTA"
+    applicationName="Essence On 설치"
+    icon="source\icon.ico"
+    border="dialog"
+    borderstyle="normal"
+    caption="yes"
+    contextmenu="no"
+    maximizebutton="no"
+    minimizebutton="yes"
+    scroll="no"
+    selection="no"
+    showintaskbar="yes"
+    singleinstance="yes"
+    sysmenu="yes"
+    version="1.0"
+    windowstate="normal"
+/>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    background:#0d0d1e;
+    font-family:'Segoe UI', sans-serif;
+    color:#fff;
+    overflow:hidden;
+    width:520px; height:624px;
+}
+.page { display:none; flex-direction:column; height:624px; }
+.page.active { display:flex; }
+.hdr {
+    background:linear-gradient(135deg,#08081e,#12124a);
+    padding:12px 28px 10px;
+    border-bottom:1px solid rgba(0,180,216,.2);
+    flex-shrink:0;
+}
+.hdr-icon { font-size:22px; margin-bottom:2px; }
+.hdr h2   { color:#00b4d8; font-size:16px; font-weight:700; }
+.hdr p    { color:rgba(255,255,255,.38); font-size:11px; margin-top:2px; }
+.stepbar {
+    display:flex;
+    background:rgba(0,0,0,.3);
+    border-bottom:1px solid rgba(255,255,255,.05);
+    padding:8px 24px; gap:4px; flex-shrink:0;
+}
+.step { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+        font-size:10px; color:rgba(255,255,255,.2); }
+.step-num { width:20px; height:20px; border-radius:50%;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1);
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:600; }
+.step.s-done   { color:#4ade80; }
+.step.s-done   .step-num { background:#4ade80; border-color:#4ade80; color:#000; }
+.step.s-active { color:#00b4d8; font-weight:700; }
+.step.s-active .step-num { background:#00b4d8; border-color:#00b4d8; color:#000; }
+.content { flex:1; padding:16px 28px; display:flex; flex-direction:column;
+           gap:12px; overflow-y:auto; }
+.content.center { justify-content:flex-start; align-items:center; text-align:center; padding-top:20px; }
+.footer { padding:10px 28px; border-top:1px solid rgba(255,255,255,.06);
+          display:flex; justify-content:flex-end; gap:10px; flex-shrink:0; }
+.btn { padding:9px 22px; border-radius:8px; border:none;
+       font-size:13px; font-weight:600; cursor:pointer;
+       font-family:inherit; transition:all .15s; }
+.btn-primary { background:linear-gradient(135deg,#005f87,#00b4d8); color:#fff; }
+.btn-primary:hover:not(:disabled) { transform:translateY(-1px); opacity:.95; }
+.btn-primary:disabled { opacity:.35; cursor:not-allowed; }
+.btn-ghost { background:rgba(255,255,255,.07); color:rgba(255,255,255,.45);
+             border:1px solid rgba(255,255,255,.1); }
+.status-box { background:rgba(0,0,0,.3); border:1px solid rgba(0,180,216,.13);
+              border-radius:10px; padding:4px 0; }
+.srow { display:flex; align-items:center; gap:10px; padding:9px 14px;
+        font-size:12.5px; color:rgba(255,255,255,.55);
+        border-bottom:1px solid rgba(255,255,255,.04); }
+.srow:last-child { border-bottom:none; }
+.srow-icon { font-size:15px; width:22px; text-align:center; flex-shrink:0; }
+.c-ok   { color:#4ade80; }
+.c-run  { color:#00b4d8; }
+.c-wait { color:rgba(255,255,255,.25); }
+.c-err  { color:#ff6b6b; }
+.prog-wrap { background:rgba(255,255,255,.07); border-radius:4px;
+             height:5px; overflow:hidden; }
+.prog-bar  { height:5px; background:linear-gradient(90deg,#005f87,#00b4d8);
+             border-radius:4px; transition:width .5s; }
+.log { background:rgba(0,0,0,.4); border:1px solid rgba(255,255,255,.07);
+       border-radius:8px; padding:8px 12px;
+       font-family:Consolas,monospace; font-size:11px;
+       color:rgba(255,255,255,.35); height:80px; overflow-y:auto; line-height:1.8; }
+.info-box { background:rgba(0,180,216,.07); border:1px solid rgba(0,180,216,.2);
+            border-radius:10px; padding:10px 14px; }
+.info-label { color:#00b4d8; font-size:11px; font-weight:700; margin-bottom:6px; }
+.item-row { display:flex; align-items:center; gap:8px; padding:5px 0;
+            font-size:12px; color:rgba(255,255,255,.6);
+            border-bottom:1px solid rgba(255,255,255,.04); }
+.item-row:last-child { border-bottom:none; }
+.item-dot { width:7px; height:7px; background:#00b4d8; border-radius:50%;
+            flex-shrink:0; display:inline-block; }
+.item-size { margin-left:auto; color:rgba(255,255,255,.35); font-size:11px;
+             white-space:nowrap; padding-left:6px; }
+.big-icon { font-size:48px; }
+.welcome-title { color:#00b4d8; font-size:17px; font-weight:700; }
+.welcome-desc { color:rgba(255,255,255,.45); font-size:12.5px; line-height:1.75; }
+.tags { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:10px; }
+.tag { background:rgba(0,180,216,.1); border:1px solid rgba(0,180,216,.2);
+       color:#00b4d8; border-radius:20px; padding:4px 12px; font-size:11px; }
+.done-title { color:#4ade80; font-size:20px; font-weight:700; margin:8px 0; }
+.done-desc  { color:rgba(255,255,255,.45); font-size:12.5px; line-height:1.9; }
+.launch-btn { padding:14px 36px;
+    background:linear-gradient(135deg,#005f87,#00b4d8);
+    border:none; border-radius:10px; color:#fff;
+    font-size:15px; font-weight:700; cursor:pointer;
+    font-family:inherit; transition:all .15s; }
+.launch-btn:hover { transform:translateY(-2px); }
+.install-btn {
+    padding:18px 44px; margin-top:4px;
+    background:linear-gradient(135deg,#005f87,#00b4d8);
+    border:none; border-radius:8px; color:#fff;
+    font-size:15px; font-weight:700; cursor:pointer;
+    font-family:inherit; transition:all .15s;
+}
+.install-btn:hover { transform:translateY(-1px); opacity:.95; }
+</style>
+</head>
+<body onload="htaInit()">
+
+<!-- ══════════════ PAGE 1: Welcome ══════════════ -->
+<div id="p1" class="page active">
+  <div class="hdr">
+    <div class="hdr-icon">🤖</div>
+    <h2>Essence On</h2>
+    <p>완전 오프라인 로컬 AI 어시스턴트 · 설치 마법사</p>
+  </div>
+  <div class="stepbar">
+    <div class="step s-active"><div class="step-num">1</div>시작</div>
+    <div class="step"><div class="step-num">2</div>설치</div>
+    <div class="step"><div class="step-num">3</div>완료</div>
+  </div>
+  <div class="content center">
+    <div class="big-icon">🤖</div>
+    <div class="welcome-title">Essence On에 오신 것을 환영합니다!</div>
+    <div class="welcome-desc">
+      인터넷 없이 이 기기에서만 동작하는 완전 보안 AI입니다.<br>
+      <span style="color:rgba(255,255,255,.3);font-size:11px;">예상 소요 시간: 5~15분 (USB 속도에 따라 다름)</span>
+    </div>
+    <div class="tags">
+      <span class="tag">완전 오프라인</span>
+      <span class="tag">로컬 AI</span>
+      <span class="tag">업무 특화</span>
+    </div>
+    <div class="info-box" style="width:100%;">
+      <div class="info-label">이 USB에 포함된 항목</div>
+      <div class="item-row"><span class="item-dot"></span><span>Ollama (로컬 AI 서버)</span><span class="item-size">~6.7 GB</span></div>
+      <div class="item-row"><span class="item-dot"></span><span>Gemma 4 e2b 모델 (빠름)</span><span class="item-size">7.2 GB</span></div>
+      <div class="item-row"><span class="item-dot"></span><span>Gemma 4 e4b 모델 (고품질)</span><span class="item-size">9.6 GB</span></div>
+      <div class="item-row"><span class="item-dot"></span><span>Essence On 앱</span><span class="item-size">~295 MB</span></div>
+    </div>
+    <div style="color:rgba(255,255,255,.25);font-size:11px;">설치 위치: C:\EssenceOn</div>
+    <button class="install-btn" onclick="goPage(2)">설치 시작 →</button>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE 2: Installing ══════════════ -->
+<div id="p2" class="page">
+  <div class="hdr">
+    <div class="hdr-icon">📦</div>
+    <h2>설치 중...</h2>
+    <p>파일을 복사하고 있습니다. 창을 닫지 마세요.</p>
+  </div>
+  <div class="stepbar">
+    <div class="step s-done"><div class="step-num">✓</div>시작</div>
+    <div class="step s-active"><div class="step-num">2</div>설치</div>
+    <div class="step"><div class="step-num">3</div>완료</div>
+  </div>
+  <div class="content">
+    <div class="status-box">
+      <div class="srow" id="row-proc">
+        <span class="srow-icon">⏸</span><span class="c-wait">기존 프로세스 종료 (대기)</span>
+      </div>
+      <div class="srow" id="row-ollama">
+        <span class="srow-icon">⏸</span><span class="c-wait">Ollama 설치 — ~6.7GB (대기)</span>
+      </div>
+      <div class="srow" id="row-models">
+        <span class="srow-icon">⏸</span><span class="c-wait">Gemma 4 모델 복사 — ~16.8GB (대기)</span>
+      </div>
+      <div class="srow" id="row-app">
+        <span class="srow-icon">⏸</span><span class="c-wait">Essence On 앱 설치 (대기)</span>
+      </div>
+      <div class="srow" id="row-sc">
+        <span class="srow-icon">⏸</span><span class="c-wait">바로가기 생성 (대기)</span>
+      </div>
+    </div>
+    <div class="prog-wrap"><div class="prog-bar" id="prog2" style="width:0%"></div></div>
+    <div class="log" id="log2">설치 준비 중...</div>
+    <div style="background:rgba(255,200,0,.07); border:1px solid rgba(255,200,0,.25); border-radius:8px; padding:10px 14px; font-size:11.5px; color:rgba(255,220,80,.75); line-height:1.7;">
+      💡 <b style="color:rgba(255,220,80,.9);">설치 중 Ollama 창이 나타날 수 있습니다.</b><br>
+      당황하지 마시고 창을 <b style="color:#fff;">닫기(✕)</b> 하거나 <b style="color:#fff;">최소화(−)</b> 해주세요.<br>
+      설치가 완료되면 자동으로 백그라운드에서 실행됩니다.
+    </div>
+    <div style="margin-top:auto; margin-bottom:90px; text-align:center; padding-top:16px;">
+      <button class="btn btn-primary" id="btn2" onclick="goPage(3)" disabled style="padding:12px 32px; font-size:14px; font-weight:700;">완료 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ PAGE 3: Done ══════════════ -->
+<div id="p3" class="page">
+  <div class="hdr">
+    <div class="hdr-icon">🎉</div>
+    <h2>설치 완료!</h2>
+    <p>Essence On이 성공적으로 설치되었습니다.</p>
+  </div>
+  <div class="stepbar">
+    <div class="step s-done"><div class="step-num">✓</div>시작</div>
+    <div class="step s-done"><div class="step-num">✓</div>설치</div>
+    <div class="step s-active"><div class="step-num">3</div>완료</div>
+  </div>
+  <div class="content center">
+    <div class="big-icon">🎉</div>
+    <div class="done-title">설치 완료!</div>
+    <div class="done-desc">
+      바탕화면의 <b style="color:#fff">Essence On</b> 아이콘으로 실행하세요.<br>
+      우측 하단 캐릭터를 클릭하면 채팅창이 열립니다.<br>
+      <span style="color:rgba(255,255,255,.3);font-size:11px;">(Ollama가 백그라운드에서 자동 실행됩니다)</span>
+    </div>
+    <button class="launch-btn" onclick="launchApp(); setTimeout(function(){window.close();},1500)" style="margin-top:26px;">🤖 Essence On 지금 실행하기</button>
+    <div style="margin-top:auto; margin-bottom:60px; text-align:center;">
+      <button class="btn btn-ghost" onclick="window.close()" style="padding:10px 28px; font-size:13px;">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var shell      = new ActiveXObject("WScript.Shell");
+var fso        = new ActiveXObject("Scripting.FileSystemObject");
+var usbDir     = "";
+var installDir = "C:\\EssenceOn";
+var ollamaDir  = "";
+var modelsDir  = "";
+var TEMP       = "";
+var ollamaOk   = false;
+
+function htaInit() {
+    window.resizeTo(540, 668);
+    window.moveTo(
+        Math.round((screen.width  - 540) / 2),
+        Math.round((screen.height - 668) / 2)
+    );
+    ollamaDir = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%") + "\\Programs\\Ollama";
+    modelsDir = shell.ExpandEnvironmentStrings("%USERPROFILE%")  + "\\.ollama\\models";
+    TEMP      = shell.ExpandEnvironmentStrings("%TEMP%");
+
+    // Determine USB root dir from this HTA's location
+    try {
+        var p = location.pathname;
+        if (p.charAt(0) === "/") p = p.substring(1);
+        // Decode URL-encoding (%20, %EC 등 한글 포함)
+        try { p = decodeURIComponent(p); } catch(e) { p = unescape(p); }
+        p = p.replace(/\//g, "\\");
+        usbDir = p.substring(0, p.lastIndexOf("\\") + 1);
+    } catch(e) {
+        usbDir = ".\\";
+    }
+
+    // 현재 경로 기준으로 바로가기 자동 생성 (USB 드라이브 문자 달라져도 정상 동작)
+    try {
+        var htaFull  = usbDir.replace(/\\$/, "") + "\\Essence On 설치하기.hta";
+        var lnkFull  = usbDir.replace(/\\$/, "") + "\\Essence On 설치하기.lnk";
+        var icoFull  = usbDir + "source\\icon.ico";
+        var sc = shell.CreateShortcut(lnkFull);
+        sc.TargetPath       = htaFull;
+        sc.WorkingDirectory = usbDir.replace(/\\$/, "");
+        sc.IconLocation     = icoFull + ", 0";
+        sc.Description      = "Essence On 설치 마법사";
+        sc.Save();
+    } catch(e) {}
+}
+
+function goPage(n) {
+    for (var i = 1; i <= 3; i++) {
+        var el = document.getElementById("p" + i);
+        el.className = (i === n) ? "page active" : "page";
+    }
+    if (n === 2) setTimeout(step1_killProcs, 400);
+}
+
+function setRow(id, icon, text, cls) {
+    document.getElementById(id).innerHTML =
+        '<span class="srow-icon">' + icon + '</span>' +
+        '<span class="' + (cls || "") + '">' + text + '</span>';
+}
+function addLog(msg) {
+    var el = document.getElementById("log2");
+    el.innerHTML += msg + "<br>";
+    el.scrollTop = el.scrollHeight;
+}
+function setProgress(pct) {
+    document.getElementById("prog2").style.width = pct + "%";
+}
+function runSync(cmd) {
+    return shell.Run('cmd /c ' + cmd, 0, true);
+}
+function fileExists(p) {
+    try { return fso.FileExists(p); } catch(e) { return false; }
+}
+function writeBat(path, lines) {
+    var ts = fso.CreateTextFile(path, true);
+    for (var i = 0; i < lines.length; i++) ts.WriteLine(lines[i]);
+    ts.Close();
+}
+
+// ── STEP 1: Kill processes ────────────────────────────────────────
+function step1_killProcs() {
+    setRow("row-proc", "⚙️", "기존 프로세스 종료 중...", "c-run");
+    runSync('taskkill /f /im "ollama app.exe" >nul 2>&1');
+    runSync('taskkill /f /im ollama.exe >nul 2>&1');
+    runSync('taskkill /f /im electron.exe >nul 2>&1');
+    setRow("row-proc", "✅", "기존 프로세스 종료 완료", "c-ok");
+    addLog("✓ 프로세스 종료");
+    setProgress(5);
+    setTimeout(step2_ollama, 1500);
+}
+
+// ── STEP 2: Ollama (async copy) ───────────────────────────────────
+function step2_ollama() {
+    setRow("row-ollama", "⚙️", "Ollama 확인 중...", "c-run");
+    var already = runSync('where ollama >nul 2>&1');
+    if (already === 0) {
+        setRow("row-ollama", "✅", "Ollama 이미 설치됨 — 건너뜀", "c-ok");
+        addLog("✓ Ollama 이미 설치됨");
+        ollamaOk = true;
+        setProgress(30);
+        setTimeout(step3_models, 500);
+        return;
+    }
+    if (!fso.FolderExists(usbDir + "ollama") || !fileExists(usbDir + "ollama\\ollama.exe")) {
+        setRow("row-ollama", "⚠️", "USB에 Ollama 없음 — 건너뜁니다", "c-err");
+        addLog("⚠ Ollama 파일 없음");
+        setProgress(30);
+        setTimeout(step3_models, 500);
+        return;
+    }
+    setRow("row-ollama", "⚙️", "Ollama 복사 중... (~6.7GB · 잠시 기다리세요)", "c-run");
+    addLog("Ollama 복사 중 (6.7GB)...");
+    if (!fso.FolderExists(ollamaDir)) fso.CreateFolder(ollamaDir);
+
+    var done = TEMP + "\\eon_ollama_done.txt";
+    try { fso.DeleteFile(done); } catch(e) {}
+    var bat  = TEMP + "\\eon_ollama.bat";
+    writeBat(bat, [
+        '@echo off',
+        'robocopy "' + usbDir + 'ollama" "' + ollamaDir + '" /E /NP /NJH /NJS',
+        'echo done > "' + done + '"'
+    ]);
+    shell.Run('cmd /c "' + bat + '"', 0, false);
+    setTimeout(function() { pollOllama(done); }, 3000);
+}
+
+function pollOllama(done) {
+    if (!fileExists(done)) { setTimeout(function() { pollOllama(done); }, 3000); return; }
+    try { fso.DeleteFile(done); } catch(e) {}
+    setRow("row-ollama", "✅", "Ollama 설치 완료", "c-ok");
+    addLog("✓ Ollama 설치 완료");
+    ollamaOk = true;
+    // Register PATH
+    var oldPath = "";
+    try { oldPath = shell.RegRead("HKCU\\Environment\\PATH"); } catch(e) {}
+    if (oldPath.toLowerCase().indexOf(ollamaDir.toLowerCase()) < 0) {
+        var np = oldPath.length > 0 ? oldPath + ";" + ollamaDir : ollamaDir;
+        shell.RegWrite("HKCU\\Environment\\PATH", np, "REG_EXPAND_SZ");
+    }
+    setProgress(30);
+    setTimeout(step3_models, 500);
+}
+
+// ── STEP 3: Models (async copy) ───────────────────────────────────
+function step3_models() {
+    setRow("row-models", "⚙️", "Gemma 4 모델 복사 중... (~16.8GB · 가장 오래 걸립니다)", "c-run");
+    addLog("모델 복사 시작 — 완료될 때까지 창을 닫지 마세요...");
+
+    // Create dirs
+    if (!fso.FolderExists(modelsDir + "\\blobs"))
+        runSync('mkdir "' + modelsDir + '\\blobs"');
+    var mfDir = modelsDir + "\\manifests\\registry.ollama.ai\\library\\gemma4";
+    if (!fso.FolderExists(mfDir))
+        runSync('mkdir "' + mfDir + '"');
+
+    // Manifests (small, sync)
+    try {
+        fso.CopyFile(usbDir + "models\\manifests\\registry.ollama.ai\\library\\gemma4\\e2b", mfDir + "\\e2b", true);
+        fso.CopyFile(usbDir + "models\\manifests\\registry.ollama.ai\\library\\gemma4\\e4b", mfDir + "\\e4b", true);
+        addLog("✓ Manifest 복사 완료");
+    } catch(e) { addLog("⚠ Manifest 복사 오류: " + e.message); }
+    setProgress(35);
+
+    // Blobs (async)
+    var done = TEMP + "\\eon_blobs_done.txt";
+    try { fso.DeleteFile(done); } catch(e) {}
+    var bat  = TEMP + "\\eon_blobs.bat";
+    writeBat(bat, [
+        '@echo off',
+        'robocopy "' + usbDir + 'models\\blobs" "' + modelsDir + '\\blobs" /E /NP /NJH /NJS',
+        'echo done > "' + done + '"'
+    ]);
+    shell.Run('cmd /c "' + bat + '"', 0, false);
+    setTimeout(function() { pollModels(done); }, 5000);
+}
+
+function pollModels(done) {
+    if (!fileExists(done)) { setTimeout(function() { pollModels(done); }, 5000); return; }
+    try { fso.DeleteFile(done); } catch(e) {}
+    setRow("row-models", "✅", "Gemma 4 모델 설치 완료", "c-ok");
+    addLog("✓ 모델 설치 완료");
+    setProgress(80);
+    setTimeout(step4_app, 500);
+}
+
+// ── STEP 4: App ───────────────────────────────────────────────────
+function step4_app() {
+    setRow("row-app", "⚙️", "Essence On 앱 복사 중...", "c-run");
+    addLog("Essence On 앱 복사 중...");
+    if (!fso.FolderExists(installDir)) try { fso.CreateFolder(installDir); } catch(e) {}
+    var rc = shell.Run('cmd /c robocopy "' + usbDir + 'source" "' + installDir + '" /E /NP /NJH /NJS', 0, true);
+    if (rc > 7) {
+        setRow("row-app", "❌", "앱 복사 실패 (code " + rc + ")", "c-err");
+        addLog("✗ 앱 복사 실패");
+        return;
+    }
+    setRow("row-app", "✅", "Essence On 앱 설치 완료", "c-ok");
+    addLog("✓ 앱 설치 완료");
+
+    // Generate icon
+    runSync('node "' + installDir + '\\create-icon.js"');
+    setProgress(90);
+    setTimeout(step5_shortcuts, 300);
+}
+
+// ── STEP 5: Shortcuts ─────────────────────────────────────────────
+function step5_shortcuts() {
+    setRow("row-sc", "⚙️", "바로가기 생성 중...", "c-run");
+    addLog("바로가기 생성 중...");
+
+    var exe     = installDir + "\\node_modules\\electron\\dist\\electron.exe";
+    var ico     = installDir + "\\icon.ico";
+    var desktop = shell.SpecialFolders("Desktop");
+
+    // Desktop
+    var ps1 = 'powershell -NoProfile -Command "' +
+        '$ws=New-Object -ComObject WScript.Shell;' +
+        '$s=$ws.CreateShortcut(\'' + desktop + '\\Essence On.lnk\');' +
+        '$s.TargetPath=\'' + exe + '\';$s.Arguments=\'.\';' +
+        '$s.WorkingDirectory=\'' + installDir + '\';' +
+        '$s.Description=\'Essence On AI 어시스턴트\';' +
+        '$s.IconLocation=\'' + ico + ',0\';$s.Save()"';
+    shell.Run(ps1, 0, true);
+
+    // Start menu
+    var smDir = shell.ExpandEnvironmentStrings("%APPDATA%") +
+                "\\Microsoft\\Windows\\Start Menu\\Programs\\EssenceOn";
+    if (!fso.FolderExists(smDir)) try { fso.CreateFolder(smDir); } catch(e) {}
+    var ps2 = 'powershell -NoProfile -Command "' +
+        '$ws=New-Object -ComObject WScript.Shell;' +
+        '$s=$ws.CreateShortcut(\'' + smDir + '\\Essence On.lnk\');' +
+        '$s.TargetPath=\'' + exe + '\';$s.Arguments=\'.\';' +
+        '$s.WorkingDirectory=\'' + installDir + '\';' +
+        '$s.Description=\'Essence On AI 어시스턴트\';' +
+        '$s.IconLocation=\'' + ico + ',0\';$s.Save()"';
+    shell.Run(ps2, 0, true);
+
+    setRow("row-sc", "✅", "바로가기 생성 완료", "c-ok");
+    addLog("✓ 바로가기 생성 완료");
+    setProgress(95);
+
+    // Start Ollama
+    if (ollamaOk) {
+        addLog("Ollama 서버 시작 중...");
+        shell.Run('"' + ollamaDir + '\\ollama app.exe"', 1, false);
+    }
+
+    setProgress(100);
+    addLog("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    addLog("✅ 풀세팅 설치 완료!");
+    document.getElementById("btn2").disabled = false;
+}
+
+// ── Launch ────────────────────────────────────────────────────────
+function launchApp() {
+    var exe = installDir + "\\node_modules\\electron\\dist\\electron.exe";
+    shell.Run('"' + exe + '" "' + installDir + '"', 1, false);
+}
+</script>
+</body>
+</html>
