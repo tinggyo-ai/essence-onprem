@@ -82,12 +82,29 @@ function windowStatePath() {
 }
 function loadWindowState() {
     try { return JSON.parse(fs.readFileSync(windowStatePath(), 'utf8')); }
-    catch { return { w: EXPANDED.w, h: EXPANDED.h }; }
+    catch { return { w: EXPANDED.w, h: EXPANDED.h, x: null, y: null }; }
 }
 function saveWindowState(w, h) {
     const dir = app.getPath('userData');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(windowStatePath(), JSON.stringify({ w, h }));
+    try {
+        const prev = JSON.parse(fs.readFileSync(windowStatePath(), 'utf8'));
+        fs.writeFileSync(windowStatePath(), JSON.stringify({ w, h, x: prev.x ?? null, y: prev.y ?? null }));
+    } catch {
+        fs.writeFileSync(windowStatePath(), JSON.stringify({ w, h, x: null, y: null }));
+    }
+}
+function saveCollapsedPos() {
+    if (!win || win.isDestroyed()) return;
+    const b = win.getBounds();
+    try {
+        const state = JSON.parse(fs.readFileSync(windowStatePath(), 'utf8'));
+        fs.writeFileSync(windowStatePath(), JSON.stringify({ ...state, x: b.x, y: b.y }));
+    } catch {
+        const dir = app.getPath('userData');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(windowStatePath(), JSON.stringify({ w: EXPANDED.w, h: EXPANDED.h, x: b.x, y: b.y }));
+    }
 }
 
 let isExpanded     = false;
@@ -205,7 +222,8 @@ function setupTray() {
 }
 
 app.whenReady().then(() => {
-    const p = getPos(COLLAPSED.w, COLLAPSED.h);
+    const ws = loadWindowState();
+    const p  = (ws.x != null && ws.y != null) ? { x: ws.x, y: ws.y } : getPos(COLLAPSED.w, COLLAPSED.h);
 
     win = new BrowserWindow({
         width : COLLAPSED.w,
@@ -296,6 +314,7 @@ ipcMain.on('drag-end', (_, payload = {}) => {
     isDragging = false;
     dragOffset = null;
     if (!isExpanded) {
+        saveCollapsedPos();
         if (payload.overRobot) win.setIgnoreMouseEvents(false);
         else repaintCollapsedWindow();
     }
@@ -344,8 +363,19 @@ ipcMain.on('chat-stream', async (_, { messages, model }) => {
         });
 
         if (!res.ok) {
-            const err = await res.text();
-            win.webContents.send('chat-error', `Ollama 오류 (${res.status}): ${err}`);
+            const errText = await res.text();
+            const low = errText.toLowerCase();
+            let msg;
+            if (res.status === 500 && (low.includes('model failed to load') || low.includes('resource limitations'))) {
+                const modeNames = { [DEFAULT_MODEL]: '빠르게', [MEDIUM_MODEL]: '표준', [QUALITY_MODEL]: '생각' };
+                const modeName = modeNames[finalModel] || finalModel;
+                msg = `⚠️ [${modeName}] 모드는 많은 메모리(RAM)를 필요로 합니다.\n현재 PC의 메모리가 부족하여 AI 모델을 불러올 수 없습니다.\n\n👉 상단에서 [빠르게] 또는 [표준] 모드로 변경 후 다시 시도해 주세요.`;
+            } else if (low.includes('not found') || res.status === 404) {
+                msg = `⚠️ 선택한 AI 모델이 설치되어 있지 않습니다.\n상단에서 다른 모드를 선택해 주세요.`;
+            } else {
+                msg = `⚠️ AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.`;
+            }
+            win.webContents.send('chat-error', msg);
             return;
         }
 
@@ -372,7 +402,11 @@ ipcMain.on('chat-stream', async (_, { messages, model }) => {
         }
         win.webContents.send('chat-done');
     } catch (err) {
-        win.webContents.send('chat-error', err.message);
+        const low = (err.message || '').toLowerCase();
+        const msg = (low.includes('fetch') || low.includes('econnrefused') || low.includes('connect'))
+            ? '⚠️ AI 엔진(Ollama)에 연결할 수 없습니다.\n잠시 기다린 후 다시 시도해 주세요.'
+            : `⚠️ 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.`;
+        win.webContents.send('chat-error', msg);
     }
 });
 
@@ -461,7 +495,7 @@ ipcMain.handle('set-auto-launch', (_, val) => {
 
 ipcMain.on('quit', () => app.quit());
 
-app.on('before-quit', () => saveCurrentExpandedSize());
+app.on('before-quit', () => { saveCurrentExpandedSize(); if (!isExpanded) saveCollapsedPos(); });
 app.on('window-all-closed', () => {});
 
 process.on('uncaughtException', (err) => {
