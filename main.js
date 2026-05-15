@@ -453,6 +453,12 @@ ipcMain.on('uninstall', () => {
     app.quit();
 });
 
+ipcMain.handle('get-auto-launch', () => app.getLoginItemSettings().openAtLogin);
+ipcMain.handle('set-auto-launch', (_, val) => {
+    app.setLoginItemSettings({ openAtLogin: val, path: process.execPath, args: [__dirname] });
+    return true;
+});
+
 ipcMain.on('quit', () => app.quit());
 
 app.on('before-quit', () => saveCurrentExpandedSize());

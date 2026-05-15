@@ -244,6 +244,32 @@ textarea.s-input { resize:none; line-height:1.5; }
 
 .s-divider { border:none; border-top:1px solid rgba(255,255,255,.07); margin:0; }
 
+/* ── 자동 시작 토글 ── */
+.s-toggle-row {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:2px 0;
+}
+.s-toggle-label { color:rgba(255,255,255,.75); font-size:13px; }
+.s-toggle-sub   { color:rgba(255,255,255,.35); font-size:11px; margin-top:2px; }
+.toggle-switch {
+    position:relative; width:44px; height:24px; flex-shrink:0;
+}
+.toggle-switch input { opacity:0; width:0; height:0; }
+.toggle-track {
+    position:absolute; inset:0;
+    background:rgba(255,255,255,.12);
+    border-radius:12px; cursor:pointer; transition:background .25s;
+}
+.toggle-switch input:checked + .toggle-track { background:#00b4d8; }
+.toggle-track::after {
+    content:''; position:absolute;
+    left:3px; top:3px;
+    width:18px; height:18px;
+    background:#fff; border-radius:50%;
+    transition:transform .25s; box-shadow:0 1px 4px rgba(0,0,0,.35);
+}
+.toggle-switch input:checked + .toggle-track::after { transform:translateX(20px); }
+
 /* ── 캐릭터 선택 그리드 ── */
 .char-grid {
     display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;
@@ -753,6 +779,23 @@ textarea.s-input { resize:none; line-height:1.5; }
 
                 <hr class="s-divider"/>
 
+                <hr class="s-divider"/>
+
+                <!-- 자동 시작 -->
+                <div class="s-section">
+                    <div class="s-label">시스템</div>
+                    <div class="s-toggle-row">
+                        <div>
+                            <div class="s-toggle-label">컴퓨터 켜지면 자동으로 실행</div>
+                            <div class="s-toggle-sub">Windows 시작 시 Essence On을 자동으로 실행합니다.</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="auto-launch-toggle">
+                            <div class="toggle-track"></div>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- 위험 구역 -->
                 <div class="s-section">
                     <div class="s-label">대화 관리</div>
@@ -1110,11 +1153,19 @@ function closeChat() {
 }
 
 /* ── 설정 패널 열기/닫기 ── */
+async function initAutoLaunchToggle() {
+    const toggle = document.getElementById('auto-launch-toggle');
+    if (!toggle) return;
+    toggle.checked = await window.aria.getAutoLaunch();
+    toggle.onchange = async () => { await window.aria.setAutoLaunch(toggle.checked); };
+}
+
 function openSettings() {
     document.getElementById('s-botname').value = botName !== 'Essence On' ? botName : '';
     document.getElementById('s-prompt').value  = customPrompt || '';
     updateModelRadio();
     updateCharGrid();
+    initAutoLaunchToggle();
     document.getElementById('settings-panel').classList.remove('hidden');
 }
 
