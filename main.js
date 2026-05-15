@@ -18,6 +18,7 @@ if (typeof electronOrPath === 'string') {
 }
 
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, shell } = electronOrPath;
+const crypto = require('crypto');
 
 // ── Ollama 로컬 엔드포인트 ──
 const OLLAMA_URL   = 'http://localhost:11434/v1/chat/completions';
@@ -105,6 +106,40 @@ function saveCollapsedPos() {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(windowStatePath(), JSON.stringify({ w: EXPANDED.w, h: EXPANDED.h, x: b.x, y: b.y }));
     }
+}
+
+// ── License ───────────────────────────────────────────────────────────
+const LIC_SECRET = 'E0n-yS6uN4jT7mP8xK2rV1cG3bH2026';
+const LIC_PREFIX = 'EON';
+
+function licensePath() {
+    return path.join(app.getPath('userData'), 'license.json');
+}
+function validateLicenseKey(key) {
+    const parts = key.toUpperCase().trim().replace(/\s/g, '').split('-');
+    if (parts.length !== 4) return false;
+    const [prefix, serial, h1, h2] = parts;
+    if (prefix !== LIC_PREFIX) return false;
+    if (!/^\d{4}$/.test(serial)) return false;
+    const n = parseInt(serial, 10);
+    if (n < 1 || n > 1000) return false;
+    const expected = crypto.createHmac('sha256', LIC_SECRET)
+        .update(`${prefix}-${serial}`)
+        .digest('hex').toUpperCase().slice(0, 8);
+    return (h1 + h2) === expected;
+}
+function isLicenseActivated() {
+    try {
+        const data = JSON.parse(fs.readFileSync(licensePath(), 'utf8'));
+        return data.activated === true && validateLicenseKey(data.key);
+    } catch { return false; }
+}
+function saveLicense(key) {
+    const dir = app.getPath('userData');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(licensePath(), JSON.stringify({
+        activated: true, key, date: new Date().toISOString(),
+    }));
 }
 
 let isExpanded     = false;
@@ -221,7 +256,7 @@ function setupTray() {
     tray.on('click', () => showWindow());
 }
 
-app.whenReady().then(() => {
+function createMainWindow() {
     const ws = loadWindowState();
     const p  = (ws.x != null && ws.y != null) ? { x: ws.x, y: ws.y } : getPos(COLLAPSED.w, COLLAPSED.h);
 
@@ -261,6 +296,39 @@ app.whenReady().then(() => {
     win.on('resize', () => enforceLockedSize());
 
     setupTray();
+}
+
+function createLicenseWindow() {
+    const licWin = new BrowserWindow({
+        width: 440,
+        height: 310,
+        resizable: false,
+        center: true,
+        frame: true,
+        title: 'Essence On 라이센스 활성화',
+        webPreferences: { nodeIntegration: true, contextIsolation: false },
+    });
+    licWin.setMenuBarVisibility(false);
+    licWin.loadFile('license.html');
+
+    ipcMain.handleOnce('validate-license', (_, key) => {
+        const valid = validateLicenseKey(key);
+        if (valid) saveLicense(key);
+        return { valid };
+    });
+    ipcMain.once('license-activated', () => {
+        licWin.close();
+        createMainWindow();
+    });
+    licWin.on('closed', () => { if (!win) app.quit(); });
+}
+
+app.whenReady().then(() => {
+    if (isLicenseActivated()) {
+        createMainWindow();
+    } else {
+        createLicenseWindow();
+    }
 });
 
 ipcMain.on('expand', () => {
