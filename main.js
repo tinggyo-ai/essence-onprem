@@ -19,6 +19,7 @@ if (typeof electronOrPath === 'string') {
 
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, shell } = electronOrPath;
 const crypto = require('crypto');
+const os = require('os');
 
 // ── Ollama 로컬 엔드포인트 ──
 const OLLAMA_URL   = 'http://localhost:11434/v1/chat/completions';
@@ -58,7 +59,95 @@ const MIN_EXPANDED = { w: 320, h: 440 };
 
 function clamp(n, min, max) { return Math.max(min, Math.min(n, max)); }
 
-app.setPath('userData', path.join(__dirname, 'userdata'));
+const legacyUserDataDir = path.join(__dirname, 'userdata');
+const secureUserDataDir = path.join(app.getPath('appData'), 'EssenceOn');
+app.setPath('userData', secureUserDataDir);
+
+function ensureDir(dir) {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+function migrateFileIfNeeded(name) {
+    const oldPath = path.join(legacyUserDataDir, name);
+    const newPath = path.join(app.getPath('userData'), name);
+    if (!fs.existsSync(newPath) && fs.existsSync(oldPath)) {
+        ensureDir(path.dirname(newPath));
+        fs.copyFileSync(oldPath, newPath);
+    }
+}
+
+function migrateDirIfNeeded(name) {
+    const oldPath = path.join(legacyUserDataDir, name);
+    const newPath = path.join(app.getPath('userData'), name);
+    if (!fs.existsSync(newPath) && fs.existsSync(oldPath)) {
+        fs.cpSync(oldPath, newPath, { recursive: true });
+    }
+}
+
+['aria-onprem-settings.json', 'window-state.json', 'license.json'].forEach(migrateFileIfNeeded);
+migrateDirIfNeeded('histories');
+
+function isTrustedSender(event) {
+    try {
+        const senderUrl = event.senderFrame?.url || event.sender?.getURL?.() || '';
+        return senderUrl.startsWith('file://') &&
+            (senderUrl.endsWith('/index.html') || senderUrl.endsWith('/license.html'));
+    } catch {
+        return false;
+    }
+}
+
+function guardEvent(event) {
+    if (!isTrustedSender(event)) throw new Error('Blocked untrusted IPC sender');
+}
+
+function sendToRenderer(channel, ...args) {
+    if (win && !win.isDestroyed()) win.webContents.send(channel, ...args);
+}
+
+function sanitizeString(value, max = 4000) {
+    return typeof value === 'string' ? value.slice(0, max) : '';
+}
+
+function sanitizeModel(value, fallback = DEFAULT_MODEL) {
+    const allowed = new Set([DEFAULT_MODEL, MEDIUM_MODEL, QUALITY_MODEL]);
+    return allowed.has(value) ? value : fallback;
+}
+
+function sanitizeMessages(messages) {
+    if (!Array.isArray(messages)) return [];
+    return messages.slice(-30).map((m) => ({
+        role: ['user', 'assistant', 'system'].includes(m?.role) ? m.role : 'user',
+        content: sanitizeString(m?.content, 20000),
+    })).filter((m) => m.content);
+}
+
+function sanitizeHistoryTitle(value) {
+    const title = sanitizeString(value, 80).replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim();
+    return title || 'untitled';
+}
+
+const ALLOWED_EXTERNAL_ORIGINS = new Set([
+    'https://ollama.com',
+]);
+
+function openAllowedExternal(url) {
+    let parsed;
+    try { parsed = new URL(String(url)); } catch { return false; }
+    if (parsed.protocol !== 'https:' || !ALLOWED_EXTERNAL_ORIGINS.has(parsed.origin)) return false;
+    shell.openExternal(parsed.href);
+    return true;
+}
+
+app.on('web-contents-created', (_, contents) => {
+    contents.setWindowOpenHandler(({ url }) => {
+        openAllowedExternal(url);
+        return { action: 'deny' };
+    });
+    contents.on('will-navigate', (event, url) => {
+        if (!String(url).startsWith('file://')) event.preventDefault();
+    });
+});
 
 function getPos(w, h) {
     const { width, height } = screen.getPrimaryDisplay().workAreaSize;
@@ -74,8 +163,14 @@ function loadSettings() {
 }
 function saveSettings(data) {
     const dir = app.getPath('userData');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(settingsPath(), JSON.stringify(data, null, 2));
+    ensureDir(dir);
+    const clean = {
+        customPrompt: sanitizeString(data?.customPrompt, 4000),
+        model       : sanitizeModel(data?.model),
+        botName     : sanitizeString(data?.botName || 'Essence On', 80),
+        charId      : sanitizeString(data?.charId || 'robot', 40),
+    };
+    fs.writeFileSync(settingsPath(), JSON.stringify(clean, null, 2));
 }
 
 function windowStatePath() {
@@ -87,7 +182,7 @@ function loadWindowState() {
 }
 function saveWindowState(w, h) {
     const dir = app.getPath('userData');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    ensureDir(dir);
     try {
         const prev = JSON.parse(fs.readFileSync(windowStatePath(), 'utf8'));
         fs.writeFileSync(windowStatePath(), JSON.stringify({ w, h, x: prev.x ?? null, y: prev.y ?? null }));
@@ -103,30 +198,38 @@ function saveCollapsedPos() {
         fs.writeFileSync(windowStatePath(), JSON.stringify({ ...state, x: b.x, y: b.y }));
     } catch {
         const dir = app.getPath('userData');
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        ensureDir(dir);
         fs.writeFileSync(windowStatePath(), JSON.stringify({ w: EXPANDED.w, h: EXPANDED.h, x: b.x, y: b.y }));
     }
 }
 
 // ── License ───────────────────────────────────────────────────────────
-const LIC_SECRET = 'E0n-yS6uN4jT7mP8xK2rV1cG3bH2026';
 const LIC_PREFIX = 'EON';
+const LIC_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAQWVZ/aVsgwm058my9ayxcsh+KcTI8NskjPtPo1rkZ+E=
+-----END PUBLIC KEY-----`;
 
 function licensePath() {
     return path.join(app.getPath('userData'), 'license.json');
 }
 function validateLicenseKey(key) {
-    const parts = key.toUpperCase().trim().replace(/\s/g, '').split('-');
-    if (parts.length !== 4) return false;
-    const [prefix, serial, h1, h2] = parts;
-    if (prefix !== LIC_PREFIX) return false;
+    const raw = String(key || '').trim().replace(/\s/g, '');
+    const match = raw.match(new RegExp(`^${LIC_PREFIX}-(\\d{4})\\.([A-Za-z0-9_-]+)$`));
+    if (!match) return false;
+    const [, serial, signature] = match;
     if (!/^\d{4}$/.test(serial)) return false;
     const n = parseInt(serial, 10);
     if (n < 1 || n > 1000) return false;
-    const expected = crypto.createHmac('sha256', LIC_SECRET)
-        .update(`${prefix}-${serial}`)
-        .digest('hex').toUpperCase().slice(0, 8);
-    return (h1 + h2) === expected;
+    try {
+        return crypto.verify(
+            null,
+            Buffer.from(`${LIC_PREFIX}-${serial}`),
+            crypto.createPublicKey(LIC_PUBLIC_KEY),
+            Buffer.from(signature, 'base64url')
+        );
+    } catch {
+        return false;
+    }
 }
 function isLicenseActivated() {
     try {
@@ -136,7 +239,7 @@ function isLicenseActivated() {
 }
 function saveLicense(key) {
     const dir = app.getPath('userData');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    ensureDir(dir);
     fs.writeFileSync(licensePath(), JSON.stringify({
         activated: true, key, date: new Date().toISOString(),
     }));
@@ -276,6 +379,9 @@ function createMainWindow() {
         webPreferences : {
             preload              : path.join(__dirname, 'preload.js'),
             contextIsolation     : true,
+            nodeIntegration      : false,
+            sandbox              : true,
+            webSecurity          : true,
             backgroundThrottling : false,
         },
     });
@@ -306,17 +412,25 @@ function createLicenseWindow() {
         center: true,
         frame: true,
         title: 'Essence On 라이센스 활성화',
-        webPreferences: { nodeIntegration: true, contextIsolation: false },
+        webPreferences: {
+            preload         : path.join(__dirname, 'license-preload.js'),
+            contextIsolation: true,
+            nodeIntegration : false,
+            sandbox         : true,
+            webSecurity     : true,
+        },
     });
     licWin.setMenuBarVisibility(false);
     licWin.loadFile('license.html');
 
-    ipcMain.handleOnce('validate-license', (_, key) => {
+    ipcMain.handle('validate-license', (event, key) => {
+        guardEvent(event);
         const valid = validateLicenseKey(key);
         if (valid) saveLicense(key);
         return { valid };
     });
-    ipcMain.once('license-activated', () => {
+    ipcMain.on('license-activated', (event) => {
+        guardEvent(event);
         licWin.close();
         createMainWindow();
     });
@@ -324,6 +438,7 @@ function createLicenseWindow() {
 }
 
 app.whenReady().then(() => {
+    try { saveSettings(loadSettings()); } catch {}
     if (isLicenseActivated()) {
         createMainWindow();
     } else {
@@ -331,7 +446,8 @@ app.whenReady().then(() => {
     }
 });
 
-ipcMain.on('expand', () => {
+ipcMain.on('expand', (event) => {
+    if (!isTrustedSender(event)) return;
     isExpanded = true;
     win.setIgnoreMouseEvents(false);
     const b = win.getBounds();
@@ -340,7 +456,8 @@ ipcMain.on('expand', () => {
                       width: ws.w, height: ws.h });
 });
 
-ipcMain.on('collapse', () => {
+ipcMain.on('collapse', (event) => {
+    if (!isTrustedSender(event)) return;
     isExpanded = false;
     const b = win.getBounds();
     saveWindowState(b.width, b.height);
@@ -349,17 +466,20 @@ ipcMain.on('collapse', () => {
     repaintCollapsedWindow();
 });
 
-ipcMain.on('mouse-enter-robot', () => {
+ipcMain.on('mouse-enter-robot', (event) => {
+    if (!isTrustedSender(event)) return;
     win.setIgnoreMouseEvents(false);
     if (isExpanded) enforceLockedSize();
 });
-ipcMain.on('mouse-leave-robot', () => {
+ipcMain.on('mouse-leave-robot', (event) => {
+    if (!isTrustedSender(event)) return;
     if (isExpanded) return;
     if (!isDragging) repaintCollapsedWindow();
 });
 
 let dragOffset = null;
-ipcMain.on('drag-start', (_, payload = {}) => {
+ipcMain.on('drag-start', (event, payload = {}) => {
+    if (!isTrustedSender(event)) return;
     isDragging = true;
     win.setIgnoreMouseEvents(false);
     const b = win.getBounds();
@@ -368,7 +488,8 @@ ipcMain.on('drag-start', (_, payload = {}) => {
     const startY = Number.isFinite(payload.sy) ? payload.sy : cursor.y;
     dragOffset = { dx: startX - b.x, dy: startY - b.y };
 });
-ipcMain.on('drag-move', () => {
+ipcMain.on('drag-move', (event) => {
+    if (!isTrustedSender(event)) return;
     if (!dragOffset) return;
     const cursor = screen.getCursorScreenPoint();
     const { x: ax, y: ay, width, height } = screen.getDisplayNearestPoint(cursor).workArea;
@@ -378,7 +499,8 @@ ipcMain.on('drag-move', () => {
     win.setPosition(x, y);
     enforceLockedSize();
 });
-ipcMain.on('drag-end', (_, payload = {}) => {
+ipcMain.on('drag-end', (event, payload = {}) => {
+    if (!isTrustedSender(event)) return;
     isDragging = false;
     dragOffset = null;
     if (!isExpanded) {
@@ -388,25 +510,28 @@ ipcMain.on('drag-end', (_, payload = {}) => {
     }
     setTimeout(() => win.webContents.invalidate(), 30);
 });
-ipcMain.on('release-mouse', () => {
+ipcMain.on('release-mouse', (event) => {
+    if (!isTrustedSender(event)) return;
     if (isExpanded) return;
     isDragging = false;
     dragOffset = null;
     repaintCollapsedWindow();
 });
-ipcMain.on('invalidate-window', () => {
+ipcMain.on('invalidate-window', (event) => {
+    if (!isTrustedSender(event)) return;
     setTimeout(() => win.webContents.invalidate(), 30);
 });
 
-ipcMain.on('resize-window-start', (_, payload = {}) => startCustomResize(payload));
-ipcMain.on('resize-window-move',  (_, payload = {}) => moveCustomResize(payload));
-ipcMain.on('resize-window-end',   ()                => endCustomResize());
+ipcMain.on('resize-window-start', (event, payload = {}) => { if (isTrustedSender(event)) startCustomResize(payload); });
+ipcMain.on('resize-window-move',  (event, payload = {}) => { if (isTrustedSender(event)) moveCustomResize(payload); });
+ipcMain.on('resize-window-end',   (event)               => { if (isTrustedSender(event)) endCustomResize(); });
 
-ipcMain.handle('get-settings',  ()        => loadSettings());
-ipcMain.handle('save-settings', (_, data) => { saveSettings(data); return true; });
+ipcMain.handle('get-settings',  (event)       => { guardEvent(event); return loadSettings(); });
+ipcMain.handle('save-settings', (event, data) => { guardEvent(event); saveSettings(data); return true; });
 
 // Ollama 연결 확인
-ipcMain.handle('check-ollama', async () => {
+ipcMain.handle('check-ollama', async (event) => {
+    guardEvent(event);
     try {
         const res = await fetch(OLLAMA_PING, { signal: AbortSignal.timeout(3000) });
         return res.ok;
@@ -416,9 +541,11 @@ ipcMain.handle('check-ollama', async () => {
 });
 
 // Ollama 스트리밍 채팅
-ipcMain.on('chat-stream', async (_, { messages, model }) => {
+ipcMain.on('chat-stream', async (event, payload = {}) => {
+    if (!isTrustedSender(event)) return;
     try {
-        const finalModel = model || DEFAULT_MODEL;
+        const finalModel = sanitizeModel(payload.model);
+        const messages = sanitizeMessages(payload.messages);
 
         const res = await fetch(OLLAMA_URL, {
             method : 'POST',
@@ -443,7 +570,7 @@ ipcMain.on('chat-stream', async (_, { messages, model }) => {
             } else {
                 msg = `⚠️ AI 응답 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.`;
             }
-            win.webContents.send('chat-error', msg);
+            sendToRenderer('chat-error', msg);
             return;
         }
 
@@ -460,30 +587,34 @@ ipcMain.on('chat-stream', async (_, { messages, model }) => {
             for (const line of lines) {
                 if (!line.startsWith('data: ')) continue;
                 const data = line.slice(6).trim();
-                if (data === '[DONE]') { win.webContents.send('chat-done'); continue; }
+                if (data === '[DONE]') { sendToRenderer('chat-done'); continue; }
                 try {
                     const json = JSON.parse(data);
                     const chunk = json.choices?.[0]?.delta?.content;
-                    if (chunk) win.webContents.send('chat-chunk', chunk);
+                    if (chunk) sendToRenderer('chat-chunk', chunk);
                 } catch {}
             }
         }
-        win.webContents.send('chat-done');
+        sendToRenderer('chat-done');
     } catch (err) {
         const low = (err.message || '').toLowerCase();
         const msg = (low.includes('fetch') || low.includes('econnrefused') || low.includes('connect'))
             ? '⚠️ AI 엔진(Ollama)에 연결할 수 없습니다.\n잠시 기다린 후 다시 시도해 주세요.'
             : `⚠️ 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.`;
-        win.webContents.send('chat-error', msg);
+        sendToRenderer('chat-error', msg);
     }
 });
 
-ipcMain.on('open-external', (_, url) => shell.openExternal(url));
+ipcMain.on('open-external', (event, url) => {
+    if (!isTrustedSender(event)) return;
+    openAllowedExternal(url);
+});
 
 // ── History (대화 요약 저장/불러오기) ──────────────────────────────
 const historiesDir = () => path.join(app.getPath('userData'), 'histories');
 
-ipcMain.handle('list-histories', () => {
+ipcMain.handle('list-histories', (event) => {
+    guardEvent(event);
     const dir = historiesDir();
     if (!fs.existsSync(dir)) return [];
     return fs.readdirSync(dir)
@@ -492,33 +623,39 @@ ipcMain.handle('list-histories', () => {
         .map(f => f.replace(/\.md$/, ''));
 });
 
-ipcMain.handle('save-history', (_, { title, content }) => {
+ipcMain.handle('save-history', (event, payload = {}) => {
+    guardEvent(event);
     const dir = historiesDir();
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const safe = title.replace(/[\\/:*?"<>|]/g, '_');
-    fs.writeFileSync(path.join(dir, safe + '.md'), content, 'utf8');
+    ensureDir(dir);
+    const safe = sanitizeHistoryTitle(payload.title);
+    fs.writeFileSync(path.join(dir, safe + '.md'), sanitizeString(payload.content, 200000), 'utf8');
     return true;
 });
 
-ipcMain.handle('load-history', (_, title) => {
-    const safe = title.replace(/[\\/:*?"<>|]/g, '_');
+ipcMain.handle('load-history', (event, title) => {
+    guardEvent(event);
+    const safe = sanitizeHistoryTitle(title);
     const p = path.join(historiesDir(), safe + '.md');
     return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
 });
 
-ipcMain.handle('delete-history', (_, title) => {
-    const safe = title.replace(/[\\/:*?"<>|]/g, '_');
+ipcMain.handle('delete-history', (event, title) => {
+    guardEvent(event);
+    const safe = sanitizeHistoryTitle(title);
     const p = path.join(historiesDir(), safe + '.md');
     if (fs.existsSync(p)) fs.unlinkSync(p);
     return true;
 });
 
-ipcMain.handle('summarize-chat', async (_, { messages, model }) => {
+ipcMain.handle('summarize-chat', async (event, payload = {}) => {
+    guardEvent(event);
+    const messages = sanitizeMessages(payload.messages);
+    const model = sanitizeModel(payload.model);
     const res = await fetch(OLLAMA_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            model: model || DEFAULT_MODEL,
+            model,
             messages: [
                 { role: 'system', content: SYSTEM_PROMPT },
                 ...messages,
@@ -532,15 +669,16 @@ ipcMain.handle('summarize-chat', async (_, { messages, model }) => {
     return data.choices[0].message.content;
 });
 
-ipcMain.on('uninstall', () => {
+ipcMain.on('uninstall', (event) => {
+    if (!isTrustedSender(event)) return;
     const installDir = __dirname;
     const normalized = installDir.replace(/\//g, '\\').toLowerCase();
     if (normalized !== 'c:\\essenceon') {
-        win.webContents.send('chat-error',
+        sendToRenderer('chat-error',
             '⚠️ 언인스톨은 C:\\EssenceOn 에 정식 설치된 경우에만 사용 가능합니다.\n현재 경로: ' + installDir);
         return;
     }
-    const tempScript = require('os').tmpdir() + '\\essenceon_remove.bat';
+    const tempScript = os.tmpdir() + '\\essenceon_remove.bat';
     const script = [
         '@echo off',
         'timeout /t 8 /nobreak > nul',
@@ -555,13 +693,16 @@ ipcMain.on('uninstall', () => {
     app.quit();
 });
 
-ipcMain.handle('get-auto-launch', () => app.getLoginItemSettings().openAtLogin);
-ipcMain.handle('set-auto-launch', (_, val) => {
-    app.setLoginItemSettings({ openAtLogin: val, path: process.execPath, args: [__dirname] });
+ipcMain.handle('get-auto-launch', (event) => { guardEvent(event); return app.getLoginItemSettings().openAtLogin; });
+ipcMain.handle('set-auto-launch', (event, val) => {
+    guardEvent(event);
+    app.setLoginItemSettings({ openAtLogin: val === true, path: process.execPath, args: [__dirname] });
     return true;
 });
 
-ipcMain.on('quit', () => app.quit());
+ipcMain.on('quit', (event) => {
+    if (isTrustedSender(event)) app.quit();
+});
 
 app.on('before-quit', () => { saveCurrentExpandedSize(); if (!isExpanded) saveCollapsedPos(); });
 app.on('window-all-closed', () => {});
