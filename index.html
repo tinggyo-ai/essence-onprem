@@ -709,14 +709,13 @@ textarea.s-input { resize:none; line-height:1.5; }
             <p style="font-size:12px;color:rgba(255,255,255,.45);text-align:center;line-height:1.7">
                 인터넷 없이 로컬에서 완전히 동작하는<br>보안 AI 어시스턴트입니다.
             </p>
-            <div id="ollama-status-box" style="width:100%;background:rgba(255,80,80,.08);border:1px solid rgba(255,80,80,.25);border-radius:12px;padding:12px 14px;">
-                <div style="color:#ff6b6b;font-size:11px;font-weight:700;margin-bottom:6px;">⚠️ Ollama 연결 안됨</div>
-                <div style="color:rgba(255,255,255,.5);font-size:11px;line-height:1.9;">
-                    터미널에서 아래 명령어를 실행하세요:<br>
-                    <code style="color:#4ade80;background:rgba(0,0,0,.3);padding:2px 6px;border-radius:4px;font-size:11px;">ollama serve</code>
+            <div id="ollama-status-box" style="width:100%;background:rgba(0,180,216,.08);border:1px solid rgba(0,180,216,.25);border-radius:12px;padding:12px 14px;">
+                <div id="ollama-status-title" style="color:#00b4d8;font-size:11px;font-weight:700;margin-bottom:6px;">⏳ AI 엔진 시작 중...</div>
+                <div id="ollama-status-desc" style="color:rgba(255,255,255,.5);font-size:11px;line-height:1.9;">
+                    잠시 기다려 주세요. 자동으로 연결됩니다.
                 </div>
             </div>
-            <button class="m-btn primary" id="ollama-check-btn" onclick="checkAndStart()">연결 확인 →</button>
+            <button class="m-btn primary" id="ollama-check-btn" onclick="checkAndStart()" style="display:none;">다시 시도</button>
         </div>
 
         <!-- DEMO BANNER -->
@@ -1044,28 +1043,58 @@ function applyBotName(name) {
     if (ok) {
         ollamaConnected = true;
         document.getElementById('badge').classList.add('hidden');
+    } else {
+        window.aria.startOllama();
+        pollOllamaUntilReady(0);
     }
 })();
+
+/* ── Ollama 폴링 ── */
+let _ollamaPollTimer = null;
+function pollOllamaUntilReady(attempt) {
+    clearTimeout(_ollamaPollTimer);
+    _ollamaPollTimer = setTimeout(async () => {
+        const ok = await window.aria.checkOllama();
+        if (ok) {
+            ollamaConnected = true;
+            document.getElementById('setup-modal').classList.add('hidden');
+            document.getElementById('badge').classList.add('hidden');
+            if (!history.length) greet();
+            focusInput();
+            return;
+        }
+        if (attempt >= 20) {
+            const box = document.getElementById('ollama-status-box');
+            box.style.background = 'rgba(255,80,80,.08)';
+            box.style.borderColor = 'rgba(255,80,80,.25)';
+            const title = document.getElementById('ollama-status-title');
+            title.style.color = '#ff6b6b';
+            title.textContent = '⚠️ AI 엔진 시작 실패';
+            document.getElementById('ollama-status-desc').textContent =
+                'Ollama 설치를 확인하고 아래 버튼을 눌러 다시 시도하세요.';
+            const btn = document.getElementById('ollama-check-btn');
+            btn.style.display = '';
+            btn.disabled = false;
+            return;
+        }
+        pollOllamaUntilReady(attempt + 1);
+    }, 3000);
+}
 
 /* ── Ollama 연결 확인 버튼 핸들러 ── */
 async function checkAndStart() {
     const btn = document.getElementById('ollama-check-btn');
-    btn.textContent = '확인 중...';
+    btn.textContent = '시작 중...';
     btn.disabled = true;
-    const ok = await window.aria.checkOllama();
-    btn.disabled = false;
-    if (ok) {
-        ollamaConnected = true;
-        document.getElementById('setup-modal').classList.add('hidden');
-        document.getElementById('badge').classList.add('hidden');
-        if (!history.length) greet();
-        focusInput();
-    } else {
-        btn.textContent = '연결 확인 →';
-        const box = document.getElementById('ollama-status-box');
-        box.style.borderColor = 'rgba(255,80,80,.5)';
-        box.querySelector('div:first-child').textContent = '⚠️ 연결 실패 — Ollama가 실행 중인지 확인하세요';
-    }
+    const box = document.getElementById('ollama-status-box');
+    box.style.background = 'rgba(0,180,216,.08)';
+    box.style.borderColor = 'rgba(0,180,216,.25)';
+    const title = document.getElementById('ollama-status-title');
+    title.style.color = '#00b4d8';
+    title.textContent = '⏳ AI 엔진 시작 중...';
+    document.getElementById('ollama-status-desc').textContent = '잠시 기다려 주세요. 자동으로 연결됩니다.';
+    window.aria.startOllama();
+    pollOllamaUntilReady(0);
 }
 
 const MODEL_META = {

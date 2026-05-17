@@ -20,6 +20,24 @@ if (typeof electronOrPath === 'string') {
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, shell } = electronOrPath;
 const crypto = require('crypto');
 const os = require('os');
+const { spawn: spawnChild } = require('child_process');
+
+function tryStartOllama() {
+    const localAppData = process.env.LOCALAPPDATA || '';
+    const appExe = path.join(localAppData, 'Programs', 'Ollama', 'ollama app.exe');
+    const cliExe = path.join(localAppData, 'Programs', 'Ollama', 'ollama.exe');
+    try {
+        if (fs.existsSync(appExe)) {
+            spawnChild(appExe, [], { detached: true, stdio: 'ignore' }).unref();
+            return true;
+        }
+        if (fs.existsSync(cliExe)) {
+            spawnChild(cliExe, ['serve'], { detached: true, stdio: 'ignore' }).unref();
+            return true;
+        }
+    } catch {}
+    return false;
+}
 
 // ── Ollama 로컬 엔드포인트 ──
 const OLLAMA_URL   = 'http://localhost:11434/v1/chat/completions';
@@ -538,6 +556,12 @@ ipcMain.handle('check-ollama', async (event) => {
     } catch {
         return false;
     }
+});
+
+// Ollama 자동 시작
+ipcMain.handle('start-ollama', (event) => {
+    guardEvent(event);
+    return tryStartOllama();
 });
 
 // Ollama 스트리밍 채팅

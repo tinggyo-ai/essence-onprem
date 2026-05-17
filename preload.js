@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('aria', {
     summarizeChat   : (data)      => ipcRenderer.invoke('summarize-chat', data),
     uninstall       : ()     => ipcRenderer.send('uninstall'),
     checkOllama     : ()     => ipcRenderer.invoke('check-ollama'),
+    startOllama     : ()     => ipcRenderer.invoke('start-ollama'),
     getAutoLaunch   : ()     => ipcRenderer.invoke('get-auto-launch'),
     setAutoLaunch   : (val)  => ipcRenderer.invoke('set-auto-launch', val),
     mouseEnterRobot  : ()    => ipcRenderer.send('mouse-enter-robot'),
