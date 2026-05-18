@@ -706,9 +706,23 @@ ipcMain.on('uninstall', (event) => {
     const script = [
         '@echo off',
         'timeout /t 8 /nobreak > nul',
+        // Ollama 프로세스 종료
+        'taskkill /f /im "ollama app.exe" >nul 2>&1',
+        'taskkill /f /im "ollama.exe" >nul 2>&1',
+        'timeout /t 2 /nobreak > nul',
+        // 앱 폴더
         `rmdir /S /Q "${installDir}" 2>nul`,
+        // Ollama 엔진
+        `if exist "%LOCALAPPDATA%\\Programs\\Ollama" rmdir /S /Q "%LOCALAPPDATA%\\Programs\\Ollama"`,
+        // AI 모델 (gemma 등 ~24GB)
+        `if exist "%USERPROFILE%\\.ollama" rmdir /S /Q "%USERPROFILE%\\.ollama"`,
+        // Electron userData (설정, 라이선스, 대화기록)
+        `if exist "%APPDATA%\\EssenceOn" rmdir /S /Q "%APPDATA%\\EssenceOn"`,
+        // 바로가기
         `if exist "%USERPROFILE%\\Desktop\\Essence On.lnk" del "%USERPROFILE%\\Desktop\\Essence On.lnk"`,
         `if exist "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\EssenceOn" rmdir /S /Q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\EssenceOn"`,
+        // PATH 레지스트리에서 Ollama 경로 제거
+        `powershell -NoProfile -Command "try{$p=[Environment]::GetEnvironmentVariable('PATH','User');if($p){$np=($p.Split(';')|Where-Object{$_ -notlike '*\\Ollama*'})-join';';[Environment]::SetEnvironmentVariable('PATH',$np,'User')}}catch{}"`,
         'del "%~f0"',
     ].join('\r\n');
     fs.writeFileSync(tempScript, script, 'utf8');

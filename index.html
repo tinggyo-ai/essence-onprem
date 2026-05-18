@@ -814,7 +814,7 @@ textarea.s-input { resize:none; line-height:1.5; }
                         ⚠️ Essence On 완전 삭제 (언인스톨)
                     </button>
                     <div style="color:rgba(255,255,255,.25);font-size:11px;line-height:1.6">
-                        앱 파일, API 키, 설정, 바로가기가 모두 삭제됩니다.
+                        앱, Ollama 엔진, AI 모델(약 24GB), 설정, 바로가기가 모두 삭제됩니다.
                     </div>
                 </div>
 
@@ -1234,8 +1234,8 @@ async function saveSettings() {
 }
 
 function confirmUninstall() {
-    if (!confirm('Essence On을 완전히 제거합니다.\n\n삭제 항목:\n- 앱 파일 전체 (C:\\EssenceOn)\n- 저장된 설정\n- 바탕화면 / 시작메뉴 바로가기\n\n정말 제거하시겠습니까?')) return;
-    if (!confirm('마지막 확인입니다.\n제거 후에는 복구가 불가능합니다.\n\n계속하시겠습니까?')) return;
+    if (!confirm('Essence On을 완전히 제거합니다.\n\n삭제 항목:\n- 앱 파일 (C:\\EssenceOn)\n- Ollama AI 엔진\n- AI 모델 파일 (약 24GB)\n- 저장된 설정 및 대화 기록\n- 바탕화면 / 시작메뉴 바로가기\n\n정말 제거하시겠습니까?')) return;
+    if (!confirm('마지막 확인입니다.\nOllama와 AI 모델(약 24GB)을 포함한 모든 파일이 삭제됩니다.\n제거 후에는 복구가 불가능합니다.\n\n계속하시겠습니까?')) return;
     window.aria.uninstall();
 }
 
