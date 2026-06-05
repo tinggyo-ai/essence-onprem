@@ -157,7 +157,7 @@ body {
       <div class="item-row"><span class="item-dot"></span><span>Gemma 4 e4b 모델 (고품질)</span><span class="item-size">9.6 GB</span></div>
       <div class="item-row"><span class="item-dot"></span><span>Essence On 앱</span><span class="item-size">~295 MB</span></div>
     </div>
-    <div style="color:rgba(255,255,255,.25);font-size:11px;">설치 위치: C:\EssenceOn</div>
+    <div style="color:rgba(255,255,255,.25);font-size:11px;">설치 위치: C:\E-AIChatbot_On</div>
     <button class="install-btn" onclick="goPage(2)">설치 시작 →</button>
   </div>
 </div>
@@ -236,7 +236,7 @@ body {
 var shell      = new ActiveXObject("WScript.Shell");
 var fso        = new ActiveXObject("Scripting.FileSystemObject");
 var usbDir     = "";
-var installDir = "C:\\EssenceOn";
+var installDir = "C:\\E-AIChatbot_On";
 var ollamaDir  = "";
 var modelsDir  = "";
 var TEMP       = "";
@@ -459,7 +459,7 @@ function step5_shortcuts() {
 
     // Start menu
     var smDir = shell.ExpandEnvironmentStrings("%APPDATA%") +
-                "\\Microsoft\\Windows\\Start Menu\\Programs\\EssenceOn";
+                "\\Microsoft\\Windows\\Start Menu\\Programs\\E-AIChatbot_On";
     if (!fso.FolderExists(smDir)) try { fso.CreateFolder(smDir); } catch(e) {}
     var ps2 = 'powershell -NoProfile -Command "' +
         '$ws=New-Object -ComObject WScript.Shell;' +

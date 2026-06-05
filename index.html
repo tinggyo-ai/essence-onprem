@@ -370,7 +370,7 @@ textarea.s-input { resize:none; line-height:1.5; }
 }
 
 /* typing dots */
-.typing-dots { display:flex; gap:4px; padding:2px; }
+.typing-dots { display:flex; gap:4px; padding:2px; align-items:center; }
 .typing-dot {
     width:5px; height:5px;
     background:#00b4d8; border-radius:50%;
@@ -378,6 +378,14 @@ textarea.s-input { resize:none; line-height:1.5; }
 }
 .typing-dot:nth-child(2) { animation-delay:.2s; }
 .typing-dot:nth-child(3) { animation-delay:.4s; }
+.typing-label {
+    font-size:11px; color:rgba(0,180,216,.8);
+    margin-left:8px; letter-spacing:.3px;
+    animation: fadeTyping 2s ease-in-out infinite;
+}
+@keyframes fadeTyping {
+    0%,100% { opacity:.5; } 50% { opacity:1; }
+}
 
 /* ── ATTACHMENT ── */
 #attach-bar {
@@ -705,8 +713,8 @@ textarea.s-input { resize:none; line-height:1.5; }
         <!-- SETUP MODAL (Ollama 연결 확인) -->
         <div id="setup-modal">
             <div style="font-size:38px">🖥️</div>
-            <h3 style="font-size:15px">Essence On</h3>
-            <p style="font-size:12px;color:rgba(255,255,255,.45);text-align:center;line-height:1.7">
+            <h3 id="setup-modal-title" style="font-size:15px">Essence On</h3>
+            <p id="setup-modal-desc" style="font-size:12px;color:rgba(255,255,255,.45);text-align:center;line-height:1.7">
                 인터넷 없이 로컬에서 완전히 동작하는<br>보안 AI 어시스턴트입니다.
             </p>
             <div id="ollama-status-box" style="width:100%;background:rgba(0,180,216,.08);border:1px solid rgba(0,180,216,.25);border-radius:12px;padding:12px 14px;">
@@ -724,24 +732,24 @@ textarea.s-input { resize:none; line-height:1.5; }
         <!-- SETTINGS PANEL -->
         <div id="settings-panel" class="hidden">
             <div id="settings-header">
-                <h3>⚙ 설정</h3>
+                <h3 id="settings-title-text">⚙ 설정</h3>
                 <button id="settings-close" onclick="closeSettings()">✕</button>
             </div>
             <div id="settings-body">
 
                 <!-- 캐릭터 이름 -->
                 <div class="s-section">
-                    <div class="s-label">캐릭터 이름</div>
+                    <div class="s-label" id="lbl-char-name">캐릭터 이름</div>
                     <input id="s-botname" class="s-input" type="text"
                            placeholder="Essence On" maxlength="20"/>
-                    <div style="color:rgba(255,255,255,.3);font-size:11px">
+                    <div id="hint-char-name" style="color:rgba(255,255,255,.3);font-size:11px">
                         챗봇의 이름을 자유롭게 설정하세요.
                     </div>
                 </div>
 
                 <!-- 캐릭터 선택 -->
                 <div class="s-section">
-                    <div class="s-label">캐릭터 선택</div>
+                    <div class="s-label" id="lbl-char">캐릭터 선택</div>
                     <div class="char-grid" id="char-grid"></div>
                 </div>
 
@@ -750,7 +758,7 @@ textarea.s-input { resize:none; line-height:1.5; }
                 <!-- 온프레미스 안내 -->
                 <div style="background:rgba(74,222,128,.05);border:1px solid rgba(74,222,128,.2);border-radius:10px;padding:10px 12px;display:flex;gap:8px;align-items:flex-start;">
                     <span style="font-size:15px;flex-shrink:0;margin-top:1px;">🔒</span>
-                    <div style="font-size:11px;color:rgba(255,255,255,.45);line-height:1.85;">
+                    <div id="lbl-privacy" style="font-size:11px;color:rgba(255,255,255,.45);line-height:1.85;">
                         모든 대화는 <b style="color:#4ade80">이 기기 안에서만</b> 처리됩니다.<br>
                         인터넷 전송 없음 · 외부 서버 없음 · 완전 오프라인
                     </div>
@@ -760,7 +768,7 @@ textarea.s-input { resize:none; line-height:1.5; }
 
                 <!-- 모델 선택 -->
                 <div class="s-section">
-                    <div class="s-label">AI 모델</div>
+                    <div class="s-label" id="lbl-model">AI 모델</div>
                     <div class="s-radio-group">
                         <div class="s-radio" id="r-4b"  onclick="selectModel('gemma3:4b')">🪶 빠르게<br><span style="font-size:10px;font-weight:400;opacity:.7">저사양 3GB</span></div>
                         <div class="s-radio" id="r-e2b" onclick="selectModel('gemma4:e2b')">⚡ 표준<br><span style="font-size:10px;font-weight:400;opacity:.7">빠름 7.2GB</span></div>
@@ -772,22 +780,31 @@ textarea.s-input { resize:none; line-height:1.5; }
 
                 <!-- 시스템 프롬프트 -->
                 <div class="s-section">
-                    <div class="s-label">Essence On 역할 설정</div>
+                    <div class="s-label" id="lbl-role">Essence On 역할 설정</div>
                     <textarea id="s-prompt" class="s-input" rows="5"
                         placeholder="Essence On의 역할이나 말투를 자유롭게 설정하세요.&#10;(비워두면 기본값 사용)"></textarea>
                 </div>
 
                 <hr class="s-divider"/>
 
+                <!-- 언어 / Language -->
+                <div class="s-section">
+                    <div class="s-label">언어 / Language</div>
+                    <div class="s-radio-group">
+                        <div class="s-radio" id="r-lang-ko" onclick="setLang('ko')">🇰🇷 한국어</div>
+                        <div class="s-radio" id="r-lang-en" onclick="setLang('en')">🇺🇸 English</div>
+                    </div>
+                </div>
+
                 <hr class="s-divider"/>
 
                 <!-- 자동 시작 -->
                 <div class="s-section">
-                    <div class="s-label">시스템</div>
+                    <div class="s-label" id="lbl-system">시스템</div>
                     <div class="s-toggle-row">
                         <div>
-                            <div class="s-toggle-label">컴퓨터 켜지면 자동으로 실행</div>
-                            <div class="s-toggle-sub">Windows 시작 시 Essence On을 자동으로 실행합니다.</div>
+                            <div class="s-toggle-label" id="autolaunch-title">컴퓨터 켜지면 자동으로 실행</div>
+                            <div class="s-toggle-sub" id="autolaunch-sub">Windows 시작 시 Essence On을 자동으로 실행합니다.</div>
                         </div>
                         <label class="toggle-switch">
                             <input type="checkbox" id="auto-launch-toggle">
@@ -796,31 +813,46 @@ textarea.s-input { resize:none; line-height:1.5; }
                     </div>
                 </div>
 
-                <!-- 위험 구역 -->
+                <!-- 대화 관리 -->
                 <div class="s-section">
-                    <div class="s-label">대화 관리</div>
-                    <button class="s-danger" onclick="clearChat()">🗑 대화 내역 초기화</button>
-                    <button class="s-btn-history" onclick="openSaveHistory()">📌 History 기억</button>
-                    <button class="s-btn-history" onclick="openLoadHistory()">📂 History 불러오기</button>
+                    <div class="s-label" id="lbl-chat">대화 관리</div>
+                    <button id="btn-clear" class="s-danger" onclick="clearChat()">🗑 대화 내역 초기화</button>
+                    <button id="btn-hist-save" class="s-btn-history" onclick="openSaveHistory()">📌 History 기억</button>
+                    <button id="btn-hist-load" class="s-btn-history" onclick="openLoadHistory()">📂 History 불러오기</button>
+                </div>
+
+                <hr class="s-divider"/>
+
+                <!-- 업데이트 -->
+                <div class="s-section">
+                    <div class="s-label" id="lbl-updates">업데이트</div>
+                    <input id="s-update-url" class="s-input" type="text"
+                           placeholder="업데이트 서버 URL (없으면 비워두세요)"
+                           style="font-size:11px;font-family:monospace;"/>
+                    <div id="hint-update-url" style="color:rgba(255,255,255,.3);font-size:11px;line-height:1.6">
+                        로컬 서버 URL 또는 네트워크 주소를 입력하세요.
+                    </div>
+                    <button id="btn-check-update" class="s-btn-history" onclick="doCheckUpdate()">🔄 업데이트 확인</button>
+                    <div id="update-status" style="font-size:11.5px;min-height:16px;color:rgba(255,255,255,.5);line-height:1.6;"></div>
                 </div>
 
                 <hr class="s-divider"/>
 
                 <!-- 앱 제거 -->
                 <div class="s-section">
-                    <div class="s-label">앱 관리</div>
-                    <button class="s-danger" onclick="confirmUninstall()"
+                    <div class="s-label" id="lbl-app">앱 관리</div>
+                    <button id="btn-uninstall" class="s-danger" onclick="confirmUninstall()"
                         style="border-color:rgba(255,80,80,.4);background:rgba(255,40,40,.06);">
                         ⚠️ Essence On 완전 삭제 (언인스톨)
                     </button>
-                    <div style="color:rgba(255,255,255,.25);font-size:11px;line-height:1.6">
+                    <div id="hint-uninstall" style="color:rgba(255,255,255,.25);font-size:11px;line-height:1.6">
                         앱, Ollama 엔진, AI 모델(약 24GB), 설정, 바로가기가 모두 삭제됩니다.
                     </div>
                 </div>
 
             </div>
             <div id="settings-footer">
-                <button class="m-btn primary" onclick="saveSettings()">저장</button>
+                <button class="m-btn primary" id="btn-settings-save" onclick="saveSettings()">저장</button>
             </div>
         </div>
 
@@ -948,6 +980,188 @@ textarea.s-input { resize:none; line-height:1.5; }
 </div>
 
 <script>
+/* ── i18n ── */
+const LOCALE = {
+    ko: {
+        status_checking:'로컬 AI · 연결 확인 중...', status_connected:'로컬 AI · 연결됨 ✓', status_error:'AI 엔진 없음 ⚠',
+        setup_desc:'인터넷 없이 로컬에서 완전히 동작하는<br>보안 AI 어시스턴트입니다.',
+        setup_starting:'⏳ AI 엔진 시작 중...', setup_wait:'잠시 기다려 주세요. 자동으로 연결됩니다.',
+        setup_failed_title:'⚠️ AI 엔진 시작 실패', setup_failed_desc:'Ollama 설치를 확인하고 아래 버튼을 눌러 다시 시도하세요.',
+        setup_retry:'다시 시도', setup_retrying:'시작 중...',
+        settings_title:'⚙ 설정',
+        lbl_char_name:'캐릭터 이름', hint_char_name:'챗봇의 이름을 자유롭게 설정하세요.',
+        lbl_char:'캐릭터 선택',
+        lbl_privacy:'모든 대화는 <b style="color:#4ade80">이 기기 안에서만</b> 처리됩니다.<br>인터넷 전송 없음 · 외부 서버 없음 · 완전 오프라인',
+        lbl_model:'AI 모델', lbl_role:'Essence On 역할 설정',
+        placeholder_role:'Essence On의 역할이나 말투를 자유롭게 설정하세요.\n(비워두면 기본값 사용)',
+        lbl_system:'시스템', autolaunch_title:'컴퓨터 켜지면 자동으로 실행',
+        autolaunch_sub:'Windows 시작 시 Essence On을 자동으로 실행합니다.',
+        lbl_chat:'대화 관리', btn_clear:'🗑 대화 내역 초기화',
+        btn_hist_save:'📌 History 기억', btn_hist_load:'📂 History 불러오기',
+        lbl_updates:'업데이트', placeholder_update_url:'업데이트 서버 URL (없으면 비워두세요)',
+        hint_update_url:'로컬 서버 URL 또는 네트워크 주소를 입력하세요.',
+        btn_check_update:'🔄 업데이트 확인',
+        lbl_app:'앱 관리', btn_uninstall:'⚠️ Essence On 완전 삭제 (언인스톨)',
+        hint_uninstall:'앱, Ollama 엔진, AI 모델(약 24GB), 설정, 바로가기가 모두 삭제됩니다.',
+        btn_save:'저장',
+        m_fast:'🪶 빠르게', m_fast_sub:'저사양 3GB', m_std:'⚡ 표준', m_std_sub:'빠름 7.2GB',
+        m_think:'🧠 생각', m_think_sub:'고품질 9.6GB',
+        m_status_fast:'로컬 AI · Gemma3 4b', m_status_std:'로컬 AI · Gemma4 e2b', m_status_think:'로컬 AI · Gemma4 e4b',
+        c_robot:'로봇', c_cat:'고양이', c_fox:'여우', c_penguin:'펭귄', c_dog:'강아지', c_alien:'에일리언',
+        greet:'안녕하세요! 저는 {name}입니다 {emoji}\n인터넷 없이 이 기기 안에서만 동작하는 온프레미스 AI예요. 무엇이든 물어보세요!',
+        input_placeholder:'메시지 입력... (Ctrl+V 이미지 붙여넣기 · 📎 파일 첨부)',
+        input_image_ph:'이미지에 대해 질문하세요...', input_file_ph:'파일에 대해 질문하세요...',
+        default_image_msg:'이 이미지를 분석해줘.',
+        attach_image_label:'📷 이미지 첨부됨', attach_image_sub:'{name} · 비전 AI로 분석',
+        attach_paste_sub:'스크린샷 · 비전 AI로 분석', attach_file_sub:' KB · 텍스트로 첨부',
+        uninstall_c1:'Essence On을 완전히 제거합니다.\n\n삭제 항목:\n- 앱 파일\n- Ollama AI 엔진\n- AI 모델 파일 (약 24GB)\n- 저장된 설정 및 대화 기록\n- 바탕화면 / 시작메뉴 바로가기\n\n정말 제거하시겠습니까?',
+        uninstall_c2:'마지막 확인입니다.\nOllama와 AI 모델(약 24GB)을 포함한 모든 파일이 삭제됩니다.\n제거 후에는 복구가 불가능합니다.\n\n계속하시겠습니까?',
+        clear_confirm:'대화 내역을 모두 삭제할까요?',
+        audio_unsupported:'온프레미스 버전은 오디오 변환을 지원하지 않습니다.',
+        file_too_large:'텍스트 파일은 100 KB 이하여야 합니다.',
+        file_prefix:'[파일: {name}]',
+        hist_no_content:'저장할 대화 내용이 없습니다.', hist_title_req:'제목을 입력해주세요.',
+        hist_summarizing:'🤖 AI가 요약 중입니다...', hist_save_ok:'✅ "{title}" 저장 완료!',
+        hist_save_fail:'❌ 저장 실패: {error}', hist_load_fail:'히스토리를 불러올 수 없습니다.',
+        hist_del_confirm:'"{title}" 히스토리를 삭제할까요?',
+        hist_empty:'저장된 히스토리가 없습니다.',
+        hist_input_ph:'히스토리 제목 입력 (예: 보고서 작업)',
+        hist_loaded_msg:'"{title}" 히스토리를 불러왔습니다!\n이전 맥락을 기억하고 있으니 이어서 편하게 말씀해주세요 😊',
+        hist_load_prompt:'[이전 대화 히스토리: "{title}"]\n\n{content}\n\n위 히스토리를 기억하고 이어서 대화해주세요.',
+        hist_save_title:'📌 History 기억', hist_load_title:'📂 History 불러오기',
+        hist_save_desc:'현재 대화를 AI가 요약해서 저장합니다.<br>나중에 이어서 대화할 때 불러오세요.',
+        btn_cancel:'취소', btn_save_btn:'저장', btn_close:'닫기', btn_ok:'확인',
+        update_checking:'업데이트 확인 중...',
+        update_none:'✓ 최신 버전입니다 (v{ver})', update_available:'🆕 새 버전 v{ver} 사용 가능',
+        update_notes_prefix:'변경사항:', btn_update_now:'지금 업데이트',
+        update_downloading:'⏳ 다운로드 중...', update_done:'✓ 업데이트 완료. 재시작합니다...',
+        update_error:'⚠️ 업데이트 실패: {error}', update_no_url:'⚠️ 업데이트 서버 URL을 먼저 설정하세요.',
+        praise_msgs:['칭찬해 주셔서 감사해요! 😊','앗, 기분이 너무 좋은걸요! ✨','더 열심히 도와드릴게요! 💪','칭찬은 고래도 춤추게 한대요 🐋','최고예요! 앞으로도 잘 부탁드려요 🤖','뿌듯해요! 또 불러주세요 😄'],
+        thinking_label:'생각 중이에요...',
+    },
+    en: {
+        status_checking:'Local AI · Checking...', status_connected:'Local AI · Connected ✓', status_error:'AI Engine Unavailable ⚠',
+        setup_desc:'A secure AI assistant that runs<br>entirely offline on your device.',
+        setup_starting:'⏳ Starting AI engine...', setup_wait:'Please wait. Connecting automatically.',
+        setup_failed_title:'⚠️ AI engine failed to start', setup_failed_desc:'Check your Ollama installation and click the button below to try again.',
+        setup_retry:'Try Again', setup_retrying:'Starting...',
+        settings_title:'⚙ Settings',
+        lbl_char_name:'Bot Name', hint_char_name:'Customize the chatbot\'s display name.',
+        lbl_char:'Character',
+        lbl_privacy:'All conversations are processed <b style="color:#4ade80">on this device only</b>.<br>No internet · No external server · Fully offline',
+        lbl_model:'AI Model', lbl_role:'System Prompt',
+        placeholder_role:'Customize the role or personality of Essence On.\n(Leave blank to use default)',
+        lbl_system:'System', autolaunch_title:'Launch at startup',
+        autolaunch_sub:'Automatically start Essence On when Windows starts.',
+        lbl_chat:'Chat Management', btn_clear:'🗑 Clear Chat History',
+        btn_hist_save:'📌 Save History', btn_hist_load:'📂 Load History',
+        lbl_updates:'Updates', placeholder_update_url:'Update server URL (leave blank to disable)',
+        hint_update_url:'Enter a local server URL or network address.',
+        btn_check_update:'🔄 Check for Updates',
+        lbl_app:'App Management', btn_uninstall:'⚠️ Uninstall Essence On',
+        hint_uninstall:'This will remove the app, Ollama engine, AI models (~24GB), settings, and shortcuts.',
+        btn_save:'Save',
+        m_fast:'🪶 Fast', m_fast_sub:'Low-spec 3GB', m_std:'⚡ Standard', m_std_sub:'Fast 7.2GB',
+        m_think:'🧠 Quality', m_think_sub:'High-quality 9.6GB',
+        m_status_fast:'Local AI · Gemma3 4b', m_status_std:'Local AI · Gemma4 e2b', m_status_think:'Local AI · Gemma4 e4b',
+        c_robot:'Robot', c_cat:'Cat', c_fox:'Fox', c_penguin:'Penguin', c_dog:'Dog', c_alien:'Alien',
+        greet:'Hello! I\'m {name} {emoji}\nI\'m an on-premise AI that works entirely offline on this device. Ask me anything!',
+        input_placeholder:'Type a message... (Ctrl+V to paste image · 📎 attach file)',
+        input_image_ph:'Ask a question about this image...', input_file_ph:'Ask a question about this file...',
+        default_image_msg:'Please analyze this image.',
+        attach_image_label:'📷 Image attached', attach_image_sub:'{name} · Vision AI analysis',
+        attach_paste_sub:'Screenshot · Vision AI analysis', attach_file_sub:' KB · Attached as text',
+        uninstall_c1:'This will completely remove Essence On.\n\nItems to be deleted:\n- App files\n- Ollama AI engine\n- AI model files (~24GB)\n- Saved settings and chat history\n- Desktop / Start menu shortcuts\n\nAre you sure?',
+        uninstall_c2:'Final confirmation.\nAll files including Ollama and AI models (~24GB) will be permanently deleted.\nThis cannot be undone.\n\nContinue?',
+        clear_confirm:'Clear all chat history?',
+        audio_unsupported:'Audio transcription is not supported in the on-premise version.',
+        file_too_large:'Text files must be 100 KB or smaller.',
+        file_prefix:'[File: {name}]',
+        hist_no_content:'No conversation to save.', hist_title_req:'Please enter a title.',
+        hist_summarizing:'🤖 AI is summarizing...', hist_save_ok:'✅ "{title}" saved successfully!',
+        hist_save_fail:'❌ Save failed: {error}', hist_load_fail:'Could not load history.',
+        hist_del_confirm:'Delete "{title}" history?',
+        hist_empty:'No saved history.',
+        hist_input_ph:'Enter a title (e.g. Report Draft)',
+        hist_loaded_msg:'"{title}" history loaded!\nI remember the previous context — feel free to continue 😊',
+        hist_load_prompt:'[Previous chat history: "{title}"]\n\n{content}\n\nPlease remember this history and continue the conversation.',
+        hist_save_title:'📌 Save History', hist_load_title:'📂 Load History',
+        hist_save_desc:'AI will summarize and save this conversation.<br>Load it later to continue where you left off.',
+        btn_cancel:'Cancel', btn_save_btn:'Save', btn_close:'Close', btn_ok:'OK',
+        update_checking:'Checking for updates...',
+        update_none:'✓ You are on the latest version (v{ver})', update_available:'🆕 New version v{ver} available',
+        update_notes_prefix:'What\'s new:', btn_update_now:'Update Now',
+        update_downloading:'⏳ Downloading...', update_done:'✓ Update complete. Restarting...',
+        update_error:'⚠️ Update failed: {error}', update_no_url:'⚠️ Please configure an update server URL first.',
+        praise_msgs:['Thank you! 😊','That made my day! ✨','I\'ll try even harder! 💪','Praise keeps me going! 🐋','You\'re the best! 🤖','So glad I could help! 😄'],
+        thinking_label:'Thinking...',
+    }
+};
+
+let lang = 'ko';
+function t(key, vars) {
+    let s = (LOCALE[lang] || LOCALE.ko)[key];
+    if (s === undefined) s = LOCALE.ko[key];
+    if (s === undefined) return key;
+    if (vars) Object.keys(vars).forEach(k => { s = s.replaceAll('{' + k + '}', vars[k]); });
+    return s;
+}
+
+function applyLocale() {
+    const el = (id) => document.getElementById(id);
+    const L = LOCALE[lang] || LOCALE.ko;
+    // Settings panel
+    const st = el('settings-title-text'); if (st) st.textContent = L.settings_title;
+    const lcn = el('lbl-char-name'); if (lcn) lcn.textContent = L.lbl_char_name;
+    const hcn = el('hint-char-name'); if (hcn) hcn.textContent = L.hint_char_name;
+    const lc = el('lbl-char'); if (lc) lc.textContent = L.lbl_char;
+    const lp = el('lbl-privacy'); if (lp) lp.innerHTML = L.lbl_privacy;
+    const lm = el('lbl-model'); if (lm) lm.textContent = L.lbl_model;
+    const lr = el('lbl-role'); if (lr) lr.textContent = L.lbl_role;
+    const sp = el('s-prompt'); if (sp) sp.placeholder = L.placeholder_role;
+    const ls = el('lbl-system'); if (ls) ls.textContent = L.lbl_system;
+    const at = el('autolaunch-title'); if (at) at.textContent = L.autolaunch_title;
+    const as = el('autolaunch-sub'); if (as) as.textContent = L.autolaunch_sub;
+    const lch = el('lbl-chat'); if (lch) lch.textContent = L.lbl_chat;
+    const bc = el('btn-clear'); if (bc) bc.textContent = L.btn_clear;
+    const bhs = el('btn-hist-save'); if (bhs) bhs.textContent = L.btn_hist_save;
+    const bhl = el('btn-hist-load'); if (bhl) bhl.textContent = L.btn_hist_load;
+    const lu = el('lbl-updates'); if (lu) lu.textContent = L.lbl_updates;
+    const suu = el('s-update-url'); if (suu) suu.placeholder = L.placeholder_update_url;
+    const huu = el('hint-update-url'); if (huu) huu.textContent = L.hint_update_url;
+    const bcu = el('btn-check-update'); if (bcu) bcu.textContent = L.btn_check_update;
+    const la = el('lbl-app'); if (la) la.textContent = L.lbl_app;
+    const bu = el('btn-uninstall'); if (bu) bu.textContent = L.btn_uninstall;
+    const hu = el('hint-uninstall'); if (hu) hu.textContent = L.hint_uninstall;
+    const bss = el('btn-settings-save'); if (bss) bss.textContent = L.btn_save;
+    // Language radio
+    const rko = el('r-lang-ko'); if (rko) rko.classList.toggle('active', lang === 'ko');
+    const ren = el('r-lang-en'); if (ren) ren.classList.toggle('active', lang === 'en');
+    // Setup modal
+    const smd = el('setup-modal-desc'); if (smd) smd.innerHTML = L.setup_desc;
+    const ost = el('ollama-status-title');
+    if (ost && !ost._failed) { ost.style.color = '#00b4d8'; ost.textContent = L.setup_starting; }
+    const osd = el('ollama-status-desc');
+    if (osd && !osd._failed) osd.textContent = L.setup_wait;
+    const ocb = el('ollama-check-btn'); if (ocb) ocb.textContent = L.setup_retry;
+    // Input placeholder
+    const mi = el('msg-input'); if (mi && !mi._customPh) mi.placeholder = L.input_placeholder;
+    // Model radios
+    const r4b = el('r-4b');
+    if (r4b) r4b.innerHTML = L.m_fast + '<br><span style="font-size:10px;font-weight:400;opacity:.7">' + L.m_fast_sub + '</span>';
+    const re2b = el('r-e2b');
+    if (re2b) re2b.innerHTML = L.m_std + '<br><span style="font-size:10px;font-weight:400;opacity:.7">' + L.m_std_sub + '</span>';
+    const re4b = el('r-e4b');
+    if (re4b) re4b.innerHTML = L.m_think + '<br><span style="font-size:10px;font-weight:400;opacity:.7">' + L.m_think_sub + '</span>';
+    // Char grid refresh (names change with lang)
+    if (document.getElementById('char-grid')?.children.length) updateCharGrid();
+    // Model pills/status
+    updateModelPills();
+}
+
+let updateUrl = '';
+
+/* ── State ── */
 let isOpen          = false;
 let isWaiting       = false;
 let history         = [];
@@ -960,12 +1174,12 @@ let pendingImage    = null;
 let pendingFile     = null; // { type:'text', content, name, ext }
 
 const CHARACTERS = [
-    { id:'robot',   emoji:'🤖', name:'로봇',     color:'#00b4d8' },
-    { id:'cat',     emoji:'🐱', name:'고양이',   color:'#ff9500' },
-    { id:'fox',     emoji:'🦊', name:'여우',     color:'#ff4444' },
-    { id:'penguin', emoji:'🐧', name:'펭귄',     color:'#a78bfa' },
-    { id:'dog',     emoji:'🐶', name:'강아지',   color:'#ffd740' },
-    { id:'alien',   emoji:'👾', name:'에일리언', color:'#4ade80' },
+    { id:'robot',   emoji:'🤖', nameKey:'c_robot',   color:'#00b4d8' },
+    { id:'cat',     emoji:'🐱', nameKey:'c_cat',     color:'#ff9500' },
+    { id:'fox',     emoji:'🦊', nameKey:'c_fox',     color:'#ff4444' },
+    { id:'penguin', emoji:'🐧', nameKey:'c_penguin', color:'#a78bfa' },
+    { id:'dog',     emoji:'🐶', nameKey:'c_dog',     color:'#ffd740' },
+    { id:'alien',   emoji:'👾', nameKey:'c_alien',   color:'#4ade80' },
 ];
 let currentChar = CHARACTERS[0];
 
@@ -1014,7 +1228,7 @@ function updateCharGrid() {
             card.style.borderColor = char.color;
             card.style.background  = char.color + '22';
         }
-        card.innerHTML = `<div class="c-emoji">${char.emoji}</div><div class="c-name">${char.name}</div>`;
+        card.innerHTML = `<div class="c-emoji">${char.emoji}</div><div class="c-name">${t(char.nameKey)}</div>`;
         card.onclick = () => { applyCharacter(char); updateCharGrid(); };
         grid.appendChild(card);
     });
@@ -1029,6 +1243,8 @@ function applyBotName(name) {
 /* ── 초기화: 저장된 설정 로드 + Ollama 자동 확인 ── */
 (async () => {
     const s = await window.aria.getSettings();
+    if (s.lang && LOCALE[s.lang]) lang = s.lang;
+    if (s.updateUrl) updateUrl = s.updateUrl;
     if (s.model) currentModel = s.model;
     if (s.customPrompt) customPrompt = s.customPrompt;
     if (s.botName) applyBotName(s.botName);
@@ -1036,7 +1252,7 @@ function applyBotName(name) {
         const char = CHARACTERS.find(c => c.id === s.charId);
         if (char) applyCharacter(char);
     }
-    updateModelPills();
+    applyLocale();
 
     // Ollama 자동 연결 확인
     const ok = await window.aria.checkOllama();
@@ -1069,10 +1285,10 @@ function pollOllamaUntilReady(attempt) {
             box.style.borderColor = 'rgba(255,80,80,.25)';
             const title = document.getElementById('ollama-status-title');
             title.style.color = '#ff6b6b';
-            title.textContent = '⚠️ AI 엔진 시작 실패';
-            document.getElementById('ollama-status-desc').textContent =
-                'Ollama 설치를 확인하고 아래 버튼을 눌러 다시 시도하세요.';
+            title.textContent = t('setup_failed_title');
+            document.getElementById('ollama-status-desc').textContent = t('setup_failed_desc');
             const btn = document.getElementById('ollama-check-btn');
+            btn.textContent = t('setup_retry');
             btn.style.display = '';
             btn.disabled = false;
             return;
@@ -1084,31 +1300,34 @@ function pollOllamaUntilReady(attempt) {
 /* ── Ollama 연결 확인 버튼 핸들러 ── */
 async function checkAndStart() {
     const btn = document.getElementById('ollama-check-btn');
-    btn.textContent = '시작 중...';
+    btn.textContent = t('setup_retrying');
     btn.disabled = true;
     const box = document.getElementById('ollama-status-box');
     box.style.background = 'rgba(0,180,216,.08)';
     box.style.borderColor = 'rgba(0,180,216,.25)';
     const title = document.getElementById('ollama-status-title');
     title.style.color = '#00b4d8';
-    title.textContent = '⏳ AI 엔진 시작 중...';
-    document.getElementById('ollama-status-desc').textContent = '잠시 기다려 주세요. 자동으로 연결됩니다.';
+    title.textContent = t('setup_starting');
+    document.getElementById('ollama-status-desc').textContent = t('setup_wait');
     window.aria.startOllama();
     pollOllamaUntilReady(0);
 }
 
-const MODEL_META = {
-    'gemma3:4b':  { label:'🪶 빠르게', sub:'3GB',   heavy:false, status:'로컬 AI · Gemma3 4b'  },
-    'gemma4:e2b': { label:'⚡ 표준',   sub:'7.2GB', heavy:false, status:'로컬 AI · Gemma4 e2b' },
-    'gemma4:e4b': { label:'🧠 생각',   sub:'9.6GB', heavy:true,  status:'로컬 AI · Gemma4 e4b' },
-};
+function getModelMeta() {
+    return {
+        'gemma3:4b':  { label:t('m_fast'),  sub:t('m_fast_sub'),  heavy:false, status:t('m_status_fast')  },
+        'gemma4:e2b': { label:t('m_std'),   sub:t('m_std_sub'),   heavy:false, status:t('m_status_std')  },
+        'gemma4:e4b': { label:t('m_think'), sub:t('m_think_sub'), heavy:true,  status:t('m_status_think') },
+    };
+}
 
 function updateModelPills() {
+    const MODEL_META = getModelMeta();
     const meta = MODEL_META[currentModel] || MODEL_META['gemma3:4b'];
     const btn  = document.getElementById('model-toggle');
-    btn.textContent = meta.label;
-    btn.classList.toggle('heavy', meta.heavy);
-    document.getElementById('status-text').textContent = meta.status;
+    if (btn) { btn.textContent = meta.label; btn.classList.toggle('heavy', meta.heavy); }
+    const st = document.getElementById('status-text');
+    if (st) st.textContent = ollamaConnected ? meta.status : t('status_checking');
 }
 
 /* ── 드롭다운 ── */
@@ -1124,10 +1343,11 @@ function toggleModelDropdown() {
     _menuEl.style.top   = (rect.bottom + 4) + 'px';
     _menuEl.style.right = (window.innerWidth - rect.right) + 'px';
 
+    const MODEL_META = getModelMeta();
     [
-        { model:'gemma3:4b',  label:'🪶 빠르게', sub:'3GB'   },
-        { model:'gemma4:e2b', label:'⚡ 표준',   sub:'7.2GB' },
-        { model:'gemma4:e4b', label:'🧠 생각',   sub:'9.6GB' },
+        { model:'gemma3:4b',  label:t('m_fast'),  sub:t('m_fast_sub')  },
+        { model:'gemma4:e2b', label:t('m_std'),   sub:t('m_std_sub')   },
+        { model:'gemma4:e4b', label:t('m_think'), sub:t('m_think_sub') },
     ].forEach(({ model, label, sub }) => {
         const el = document.createElement('div');
         el.className = 'model-option'
@@ -1193,9 +1413,14 @@ async function initAutoLaunchToggle() {
 function openSettings() {
     document.getElementById('s-botname').value = botName !== 'Essence On' ? botName : '';
     document.getElementById('s-prompt').value  = customPrompt || '';
+    const suu = document.getElementById('s-update-url');
+    if (suu) suu.value = updateUrl || '';
+    const ustat = document.getElementById('update-status');
+    if (ustat) ustat.textContent = '';
     updateModelRadio();
     updateCharGrid();
     initAutoLaunchToggle();
+    applyLocale();
     document.getElementById('settings-panel').classList.remove('hidden');
 }
 
@@ -1222,11 +1447,16 @@ async function saveSettings() {
     customPrompt = newPrompt;
     applyBotName(newName || 'Essence On');
 
+    const newUpdateUrl = (document.getElementById('s-update-url')?.value || '').trim();
+    updateUrl = newUpdateUrl;
+
     await window.aria.saveSettings({
         customPrompt : customPrompt,
         model        : currentModel,
         botName      : botName,
         charId       : currentChar.id,
+        lang         : lang,
+        updateUrl    : updateUrl,
     });
 
     updateModelPills();
@@ -1234,13 +1464,13 @@ async function saveSettings() {
 }
 
 function confirmUninstall() {
-    if (!confirm('Essence On을 완전히 제거합니다.\n\n삭제 항목:\n- 앱 파일 (C:\\EssenceOn)\n- Ollama AI 엔진\n- AI 모델 파일 (약 24GB)\n- 저장된 설정 및 대화 기록\n- 바탕화면 / 시작메뉴 바로가기\n\n정말 제거하시겠습니까?')) return;
-    if (!confirm('마지막 확인입니다.\nOllama와 AI 모델(약 24GB)을 포함한 모든 파일이 삭제됩니다.\n제거 후에는 복구가 불가능합니다.\n\n계속하시겠습니까?')) return;
+    if (!confirm(t('uninstall_c1'))) return;
+    if (!confirm(t('uninstall_c2'))) return;
     window.aria.uninstall();
 }
 
 function clearChat() {
-    if (!confirm('대화 내역을 모두 삭제할까요?')) return;
+    if (!confirm(t('clear_confirm'))) return;
     history = [];
     greeted = false;
     document.getElementById('messages').innerHTML = '';
@@ -1255,24 +1485,24 @@ function closeHistoryModal() {
 
 async function openSaveHistory() {
     if (history.length === 0) {
-        alert('저장할 대화 내용이 없습니다.'); return;
+        alert(t('hist_no_content')); return;
     }
     closeSettings();
     const overlay = document.getElementById('history-overlay');
     const body    = document.getElementById('history-box-body');
     const footer  = document.getElementById('history-box-footer');
-    document.getElementById('history-box-title').textContent = '📌 History 기억';
+    document.getElementById('history-box-title').textContent = t('hist_save_title');
 
     body.innerHTML = `
         <div style="color:rgba(255,255,255,.45);font-size:11.5px;line-height:1.7;margin-bottom:4px;">
-            현재 대화를 AI가 요약해서 저장합니다.<br>나중에 이어서 대화할 때 불러오세요.
+            ${t('hist_save_desc')}
         </div>
         <input id="hist-input" class="hist-title-input" type="text"
-            placeholder="히스토리 제목 입력 (예: 보고서 작업)" maxlength="40"
+            placeholder="${t('hist_input_ph')}" maxlength="40"
             onkeydown="if(event.key==='Enter')doSaveHistory()"/>`;
     footer.innerHTML = `
-        <button class="hist-btn ghost" onclick="closeHistoryModal()">취소</button>
-        <button class="hist-btn primary" onclick="doSaveHistory()">저장</button>`;
+        <button class="hist-btn ghost" onclick="closeHistoryModal()">${t('btn_cancel')}</button>
+        <button class="hist-btn primary" onclick="doSaveHistory()">${t('btn_save_btn')}</button>`;
 
     overlay.classList.add('show');
     setTimeout(() => document.getElementById('hist-input')?.focus(), 100);
@@ -1284,19 +1514,19 @@ async function doSaveHistory() {
 
     const body   = document.getElementById('history-box-body');
     const footer = document.getElementById('history-box-footer');
-    body.innerHTML   = `<div style="color:rgba(255,255,255,.5);font-size:12px;text-align:center;padding:20px 0;">🤖 AI가 요약 중입니다...</div>`;
+    body.innerHTML   = `<div style="color:rgba(255,255,255,.5);font-size:12px;text-align:center;padding:20px 0;">${t('hist_summarizing')}</div>`;
     footer.innerHTML = '';
 
     try {
         const summary = await window.aria.summarizeChat({ messages: history, model: currentModel });
-        const date    = new Date().toLocaleDateString('ko-KR');
-        const content = `# ${title}\n\n> 저장일: ${date}\n\n${summary}`;
+        const date    = new Date().toLocaleDateString(lang === 'en' ? 'en-US' : 'ko-KR');
+        const content = `# ${title}\n\n> ${date}\n\n${summary}`;
         await window.aria.saveHistory({ title, content });
-        body.innerHTML   = `<div style="color:#4ade80;font-size:12px;text-align:center;padding:20px 0;">✅ "${esc(title)}" 저장 완료!</div>`;
-        footer.innerHTML = `<button class="hist-btn primary" style="flex:1" onclick="closeHistoryModal()">확인</button>`;
+        body.innerHTML   = `<div style="color:#4ade80;font-size:12px;text-align:center;padding:20px 0;">${esc(t('hist_save_ok', { title }))}</div>`;
+        footer.innerHTML = `<button class="hist-btn primary" style="flex:1" onclick="closeHistoryModal()">${t('btn_ok')}</button>`;
     } catch(e) {
-        body.innerHTML   = `<div style="color:#ff6b6b;font-size:12px;text-align:center;padding:20px 0;">❌ 저장 실패: ${esc(e.message)}</div>`;
-        footer.innerHTML = `<button class="hist-btn ghost" style="flex:1" onclick="closeHistoryModal()">닫기</button>`;
+        body.innerHTML   = `<div style="color:#ff6b6b;font-size:12px;text-align:center;padding:20px 0;">${esc(t('hist_save_fail', { error: e.message }))}</div>`;
+        footer.innerHTML = `<button class="hist-btn ghost" style="flex:1" onclick="closeHistoryModal()">${t('btn_close')}</button>`;
     }
 }
 
@@ -1305,40 +1535,40 @@ async function openLoadHistory() {
     const overlay = document.getElementById('history-overlay');
     const body    = document.getElementById('history-box-body');
     const footer  = document.getElementById('history-box-footer');
-    document.getElementById('history-box-title').textContent = '📂 History 불러오기';
+    document.getElementById('history-box-title').textContent = t('hist_load_title');
 
     const list = await window.aria.listHistories();
     if (list.length === 0) {
-        body.innerHTML   = `<div class="hist-empty">저장된 히스토리가 없습니다.</div>`;
-        footer.innerHTML = `<button class="hist-btn ghost" style="flex:1" onclick="closeHistoryModal()">닫기</button>`;
+        body.innerHTML   = `<div class="hist-empty">${t('hist_empty')}</div>`;
+        footer.innerHTML = `<button class="hist-btn ghost" style="flex:1" onclick="closeHistoryModal()">${t('btn_close')}</button>`;
     } else {
         body.innerHTML = list.map(t => `
             <div class="hist-item" onclick="doLoadHistory('${t.replace(/'/g,"\\'")}')">
                 <span class="hist-item-name">📄 ${esc(t)}</span>
                 <button class="hist-item-del" onclick="event.stopPropagation();doDeleteHistory('${t.replace(/'/g,"\\'")}')">🗑</button>
             </div>`).join('');
-        footer.innerHTML = `<button class="hist-btn ghost" style="flex:1" onclick="closeHistoryModal()">닫기</button>`;
+        footer.innerHTML = `<button class="hist-btn ghost" style="flex:1" onclick="closeHistoryModal()">${t('btn_close')}</button>`;
     }
     overlay.classList.add('show');
 }
 
 async function doLoadHistory(title) {
     const content = await window.aria.loadHistory(title);
-    if (!content) { alert('히스토리를 불러올 수 없습니다.'); return; }
+    if (!content) { alert(t('hist_load_fail')); return; }
     closeHistoryModal();
 
     history = [
-        { role: 'user',      content: `[이전 대화 히스토리: "${title}"]\n\n${content}\n\n위 히스토리를 기억하고 이어서 대화해주세요.` },
-        { role: 'assistant', content: `"${title}" 히스토리를 불러왔습니다! 이전 맥락을 기억하고 있으니 이어서 편하게 말씀해주세요 😊` },
+        { role: 'user',      content: t('hist_load_prompt', { title, content }) },
+        { role: 'assistant', content: t('hist_loaded_msg', { title }) },
     ];
     document.getElementById('messages').innerHTML = '';
     greeted = true;
-    addMsg('bot', `"${title}" 히스토리를 불러왔습니다!\n이전 맥락을 기억하고 있으니 이어서 편하게 말씀해주세요 😊`);
+    addMsg('bot', t('hist_loaded_msg', { title }));
     focusInput();
 }
 
 async function doDeleteHistory(title) {
-    if (!confirm(`"${title}" 히스토리를 삭제할까요?`)) return;
+    if (!confirm(t('hist_del_confirm', { title }))) return;
     await window.aria.deleteHistory(title);
     openLoadHistory();
 }
@@ -1347,7 +1577,7 @@ async function doDeleteHistory(title) {
 function greet() {
     if (greeted) return;
     greeted = true;
-    addMsg('bot', `안녕하세요! 저는 ${botName}입니다 ${currentChar.emoji}\n인터넷 없이 이 기기 안에서만 동작하는 온프레미스 AI예요. 무엇이든 물어보세요!`);
+    addMsg('bot', t('greet', { name: botName, emoji: currentChar.emoji }));
 }
 
 function addMsg(role, text) {
@@ -1395,9 +1625,11 @@ function createStreamBubble() {
 function showTyping() {
     const wrap = document.createElement('div');
     wrap.className = 'msg bot'; wrap.id = 'typing';
+    const label = t('thinking_label') || '생각 중이에요...';
     wrap.innerHTML = `<div class="msg-av">${currentChar.emoji}</div>
         <div class="msg-bubble"><div class="typing-dots">
             <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+            <span class="typing-label">${label}</span>
         </div></div>`;
     document.getElementById('messages').appendChild(wrap);
 }
@@ -1439,9 +1671,10 @@ async function handleFileSelect(e) {
             pendingFile  = null;
             pendingImage = resized;
             showAttachBar({ type:'image', src: resized,
-                label:'📷 이미지 첨부됨', sub: name + ' · 비전 AI로 분석' });
+                label:t('attach_image_label'), sub: t('attach_image_sub', { name }) });
             document.getElementById('attach-btn').classList.add('active');
-            document.getElementById('msg-input').placeholder = '이미지에 대해 질문하세요...';
+            const mi = document.getElementById('msg-input');
+            mi._customPh = true; mi.placeholder = t('input_image_ph');
             document.getElementById('msg-input').focus();
         };
         reader.readAsDataURL(file);
@@ -1450,12 +1683,12 @@ async function handleFileSelect(e) {
 
     const AUDIO_EXTS = ['mp3','mp4','wav','m4a','webm','ogg','flac','mpeg','mpga'];
     if (mime.startsWith('audio/') || AUDIO_EXTS.includes(ext)) {
-        alert('온프레미스 버전은 오디오 변환을 지원하지 않습니다.');
+        alert(t('audio_unsupported'));
         return;
     }
 
     // 텍스트 파일
-    if (file.size > 100 * 1024) { alert('텍스트 파일은 100 KB 이하여야 합니다.'); return; }
+    if (file.size > 100 * 1024) { alert(t('file_too_large')); return; }
     const reader = new FileReader();
     reader.onload = (ev) => {
         const content = ev.target.result;
@@ -1464,9 +1697,10 @@ async function handleFileSelect(e) {
         pendingImage  = null;
         const codeExts = ['py','js','ts','jsx','tsx','html','css','json'];
         const icon = codeExts.includes(ext) ? '💻' : '📄';
-        showAttachBar({ type:'file', icon, label: icon + ' ' + name, sub: sizeKB + ' KB · 텍스트로 첨부' });
+        showAttachBar({ type:'file', icon, label: icon + ' ' + name, sub: sizeKB + t('attach_file_sub') });
         document.getElementById('attach-btn').classList.add('active');
-        document.getElementById('msg-input').placeholder = '파일에 대해 질문하세요...';
+        const mi2 = document.getElementById('msg-input');
+        mi2._customPh = true; mi2.placeholder = t('input_file_ph');
         document.getElementById('msg-input').focus();
     };
     reader.readAsText(file, 'utf-8');
@@ -1496,7 +1730,8 @@ function clearAllAttachments() {
     bar.classList.add('hidden');
     bar.innerHTML = '';
     document.getElementById('attach-btn').classList.remove('active');
-    document.getElementById('msg-input').placeholder = '메시지 입력... (Ctrl+V 이미지 붙여넣기 · 📎 파일 첨부)';
+    const mi = document.getElementById('msg-input');
+    mi._customPh = false; mi.placeholder = t('input_placeholder');
 }
 
 /* ── 이미지 붙여넣기 ── */
@@ -1513,9 +1748,10 @@ document.addEventListener('paste', async (e) => {
                 pendingFile  = null;
                 pendingImage = resized;
                 showAttachBar({ type:'image', src: resized,
-                    label:'📷 이미지 첨부됨', sub:'스크린샷 · 비전 AI로 분석' });
+                    label:t('attach_image_label'), sub:t('attach_paste_sub') });
                 document.getElementById('attach-btn').classList.add('active');
-                document.getElementById('msg-input').placeholder = '이미지에 대해 질문하세요...';
+                const mi3 = document.getElementById('msg-input');
+                mi3._customPh = true; mi3.placeholder = t('input_image_ph');
                 document.getElementById('msg-input').focus();
             };
             reader.readAsDataURL(blob);
@@ -1552,14 +1788,14 @@ async function sendMsg() {
     let userText, displayText;
 
     if (imageToSend) {
-        userText    = text || '이 이미지를 분석해줘.';
+        userText    = text || t('default_image_msg');
         addMsgWithImage(text, imageToSend);
     } else if (fileToSend) {
         const codeExts = ['py','js','ts','jsx','tsx','html','css','json','txt','md','csv','log'];
         const fence    = codeExts.includes(fileToSend.ext)
             ? '```' + fileToSend.ext + '\n' + fileToSend.content + '\n```'
             : fileToSend.content;
-        userText    = `[파일: ${fileToSend.name}]\n${fence}${text ? '\n\n' + text : ''}`;
+        userText    = t('file_prefix', { name: fileToSend.name }) + '\n' + fence + (text ? '\n\n' + text : '');
         displayText = `📎 ${fileToSend.name}${text ? '\n' + text : ''}`;
         addMsg('user', displayText);
     } else {
@@ -1574,23 +1810,28 @@ async function sendMsg() {
     document.getElementById('send-btn').disabled = true;
     showTyping();
 
-    document.getElementById('typing')?.remove();
-    const bubble = createStreamBubble();
+    let bubble = null;
     let botText = '';
 
     try {
         await new Promise((resolve, reject) => {
             window.aria.onChunk((chunk) => {
+                if (!bubble) {
+                    document.getElementById('typing')?.remove();
+                    bubble = createStreamBubble();
+                }
                 botText += chunk;
                 bubble.innerHTML = esc(botText).replace(/\n/g, '<br>');
                 document.getElementById('messages').scrollTop = 99999;
             });
             window.aria.onDone(() => { window.aria.offListeners(); resolve(); });
             window.aria.onError((err) => { window.aria.offListeners(); reject(new Error(err)); });
-            window.aria.chatStream({ messages: history, model: currentModel, image: imageToSend });
+            window.aria.chatStream({ messages: history, model: currentModel, image: imageToSend, lang });
         });
         history.push({ role: 'assistant', content: botText });
     } catch(e) {
+        document.getElementById('typing')?.remove();
+        if (!bubble) bubble = createStreamBubble();
         bubble.innerHTML = `⚠️ 오류: ${esc(e.message)}`;
     }
 
@@ -1599,22 +1840,91 @@ async function sendMsg() {
     focusInput();
 }
 
+/* ── 언어 전환 ── */
+function setLang(newLang) {
+    if (!LOCALE[newLang]) return;
+    lang = newLang;
+    applyLocale();
+}
+
+/* ── 자동 업데이트 ── */
+let _updateInfo = null;
+
+async function doCheckUpdate() {
+    const statusEl = document.getElementById('update-status');
+    const btnEl    = document.getElementById('btn-check-update');
+    if (!statusEl || !btnEl) return;
+
+    const currentUrl = (document.getElementById('s-update-url')?.value || '').trim();
+    if (!currentUrl) {
+        statusEl.style.color = '#ff6b6b';
+        statusEl.textContent = t('update_no_url');
+        return;
+    }
+
+    statusEl.style.color = 'rgba(255,255,255,.5)';
+    statusEl.textContent = t('update_checking');
+    btnEl.disabled = true;
+
+    // URL을 임시 반영하여 check
+    updateUrl = currentUrl;
+    await window.aria.saveSettings({ customPrompt, model: currentModel, botName,
+        charId: currentChar.id, lang, updateUrl });
+
+    const result = await window.aria.checkUpdate();
+    btnEl.disabled = false;
+
+    if (result.error && !result.hasUpdate) {
+        statusEl.style.color = '#ff6b6b';
+        statusEl.textContent = t('update_error', { error: result.error });
+        return;
+    }
+    if (!result.hasUpdate) {
+        statusEl.style.color = '#4ade80';
+        statusEl.textContent = t('update_none', { ver: result.currentVersion || '?' });
+        _updateInfo = null;
+        return;
+    }
+
+    _updateInfo = result;
+    statusEl.style.color = '#ffd740';
+    let msg = t('update_available', { ver: result.version });
+    if (result.notes) msg += '\n' + t('update_notes_prefix') + ' ' + result.notes;
+    statusEl.textContent = msg;
+
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 's-btn-history';
+    applyBtn.style.marginTop = '4px';
+    applyBtn.textContent = t('btn_update_now');
+    applyBtn.onclick = () => applyUpdate(result);
+    statusEl.after(applyBtn);
+}
+
+async function applyUpdate(info) {
+    const statusEl = document.getElementById('update-status');
+    if (statusEl) { statusEl.style.color = '#00b4d8'; statusEl.textContent = t('update_downloading'); }
+    window.aria.onUpdateProgress((p) => {
+        if (p.done && statusEl) {
+            statusEl.style.color = '#4ade80';
+            statusEl.textContent = t('update_done');
+        }
+    });
+    const result = await window.aria.applyUpdate(info);
+    if (!result.success && statusEl) {
+        statusEl.style.color = '#ff6b6b';
+        statusEl.textContent = t('update_error', { error: result.error });
+    }
+}
+
 /* ── 칭찬 ── */
-const PRAISE_MSGS = [
-    '칭찬해 주셔서 감사해요! 😊',
-    '앗, 기분이 너무 좋은걸요! ✨',
-    '더 열심히 도와드릴게요! 💪',
-    '칭찬은 고래도 춤추게 한대요 🐋',
-    '최고예요! 앞으로도 잘 부탁드려요 🤖',
-    '뿌듯해요! 또 불러주세요 😄',
-];
 
 function praiseMsg(btn) {
     if (btn.classList.contains('praised')) return;
     btn.classList.add('praised');
     btn.textContent = '👍';
     btn.parentElement.style.opacity = '1';
-    const msg = PRAISE_MSGS[Math.floor(Math.random() * PRAISE_MSGS.length)];
+    const msgs = t('praise_msgs');
+    const msg = Array.isArray(msgs) ? msgs[Math.floor(Math.random() * msgs.length)] : '👍';
     showPraiseToast(msg);
 }
 

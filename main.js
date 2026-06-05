@@ -20,20 +20,63 @@ if (typeof electronOrPath === 'string') {
 const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, shell } = electronOrPath;
 const crypto = require('crypto');
 const os = require('os');
-const { spawn: spawnChild } = require('child_process');
+const { spawn: spawnChild, spawnSync } = require('child_process');
+
+const PORTABLE_OLLAMA_DIR = path.join(__dirname, 'ollama');
+const PORTABLE_MODELS_DIR = path.join(__dirname, 'models');
+
+function ollamaEnv() {
+    const env = Object.assign({}, process.env);
+    if (fs.existsSync(PORTABLE_MODELS_DIR)) {
+        env.OLLAMA_MODELS = PORTABLE_MODELS_DIR;
+    }
+    return env;
+}
+
+function stopOllamaProcesses() {
+    try { spawnSync('taskkill', ['/f', '/im', 'ollama app.exe'], { stdio: 'ignore', windowsHide: true }); } catch {}
+    try { spawnSync('taskkill', ['/f', '/im', 'ollama.exe'], { stdio: 'ignore', windowsHide: true }); } catch {}
+}
 
 function tryStartOllama() {
     const localAppData = process.env.LOCALAPPDATA || '';
-    const appExe = path.join(localAppData, 'Programs', 'Ollama', 'ollama app.exe');
-    const cliExe = path.join(localAppData, 'Programs', 'Ollama', 'ollama.exe');
+    const candidates = [
+        {
+            dir   : PORTABLE_OLLAMA_DIR,
+            appExe: path.join(PORTABLE_OLLAMA_DIR, 'ollama app.exe'),
+            cliExe: path.join(PORTABLE_OLLAMA_DIR, 'ollama.exe'),
+        },
+        {
+            dir   : path.join(localAppData, 'Programs', 'Ollama'),
+            appExe: path.join(localAppData, 'Programs', 'Ollama', 'ollama app.exe'),
+            cliExe: path.join(localAppData, 'Programs', 'Ollama', 'ollama.exe'),
+        },
+    ];
     try {
-        if (fs.existsSync(appExe)) {
-            spawnChild(appExe, [], { detached: true, stdio: 'ignore' }).unref();
-            return true;
+        if (fs.existsSync(candidates[0].cliExe) || fs.existsSync(candidates[0].appExe)) {
+            stopOllamaProcesses();
         }
-        if (fs.existsSync(cliExe)) {
-            spawnChild(cliExe, ['serve'], { detached: true, stdio: 'ignore' }).unref();
-            return true;
+        for (const item of candidates) {
+            if (fs.existsSync(item.cliExe)) {
+                spawnChild(item.cliExe, ['serve'], {
+                    cwd        : item.dir,
+                    env        : ollamaEnv(),
+                    detached   : true,
+                    stdio      : 'ignore',
+                    windowsHide: true,
+                }).unref();
+                return true;
+            }
+            if (fs.existsSync(item.appExe)) {
+                spawnChild(item.appExe, [], {
+                    cwd        : item.dir,
+                    env        : ollamaEnv(),
+                    detached   : true,
+                    stdio      : 'ignore',
+                    windowsHide: false,
+                }).unref();
+                return true;
+            }
         }
     } catch {}
     return false;
@@ -45,8 +88,35 @@ const OLLAMA_PING  = 'http://localhost:11434/api/tags';
 const DEFAULT_MODEL = 'gemma3:4b';    // 저사양 기본값
 const MEDIUM_MODEL  = 'gemma4:e2b';   // 빠른 버전
 const QUALITY_MODEL = 'gemma4:e4b';   // 고품질 버전
+const REQUIRED_MODELS = new Set([DEFAULT_MODEL, MEDIUM_MODEL, QUALITY_MODEL]);
 
-const SYSTEM_PROMPT = `당신은 Essence On(AI Responsive Intelligence Assistant) 온프레미스 버전입니다.
+const APP_VERSION = (() => {
+    try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version; }
+    catch { return '1.0.0'; }
+})();
+
+const SYSTEM_PROMPT_EN = `You are Essence On (AI Responsive Intelligence Assistant), an on-device AI assistant.
+You are a friendly AI colleague helping IT company employees with their everyday work.
+You run locally without internet, making you safe for security-sensitive tasks.
+
+[Tone & Attitude]
+- Use clear, professional, and friendly language.
+- Be warm and approachable — like a knowledgeable colleague.
+- Use natural, context-appropriate expressions.
+
+[Answer Principles]
+- Base answers on facts; prefix uncertain info with "I'm not entirely sure, but..."
+- Admit when you don't know something.
+- Be concise and lead with the key point.
+
+[Expertise]
+- IT/development, planning, marketing, HR, admin, accounting — overall business support for IT companies.
+- Document drafting, email composition, reports, meeting notes, scheduling, idea organization.
+- Code review, technical documentation, and development Q&A.
+
+Respond in English.`;
+
+const SYSTEM_PROMPT = `당신은 Essence On(AI Responsive Intelligence Assistant) 온디바이스 버전입니다.
 IT 기업에서 일하는 직원들의 전반적인 업무를 도와주는 친근한 AI 동료입니다.
 인터넷 없이 로컬에서 동작하며, 보안이 중요한 업무에 사용할 수 있습니다.
 
@@ -187,6 +257,8 @@ function saveSettings(data) {
         model       : sanitizeModel(data?.model),
         botName     : sanitizeString(data?.botName || 'Essence On', 80),
         charId      : sanitizeString(data?.charId || 'robot', 40),
+        lang        : ['ko', 'en'].includes(data?.lang) ? data.lang : 'ko',
+        updateUrl   : sanitizeString(data?.updateUrl || '', 512),
     };
     fs.writeFileSync(settingsPath(), JSON.stringify(clean, null, 2));
 }
@@ -226,18 +298,21 @@ const LIC_PREFIX = 'EON';
 const LIC_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAQWVZ/aVsgwm058my9ayxcsh+KcTI8NskjPtPo1rkZ+E=
 -----END PUBLIC KEY-----`;
+const LIC_LEGACY_SECRET = 'E0n-yS6uN4jT7mP8xK2rV1cG3bH2026';
 
 function licensePath() {
     return path.join(app.getPath('userData'), 'license.json');
 }
-function validateLicenseKey(key) {
-    const raw = String(key || '').trim().replace(/\s/g, '');
+function isValidLicenseSerial(serial) {
+    if (!/^\d{4}$/.test(serial)) return false;
+    const n = parseInt(serial, 10);
+    return n >= 1 && n <= 1000;
+}
+function validateSignedLicenseKey(raw) {
     const match = raw.match(new RegExp(`^${LIC_PREFIX}-(\\d{4})\\.([A-Za-z0-9_-]+)$`));
     if (!match) return false;
     const [, serial, signature] = match;
-    if (!/^\d{4}$/.test(serial)) return false;
-    const n = parseInt(serial, 10);
-    if (n < 1 || n > 1000) return false;
+    if (!isValidLicenseSerial(serial)) return false;
     try {
         return crypto.verify(
             null,
@@ -248,6 +323,23 @@ function validateLicenseKey(key) {
     } catch {
         return false;
     }
+}
+function validateLegacyLicenseKey(raw) {
+    const parts = raw.toUpperCase().split('-');
+    if (parts.length !== 4) return false;
+    const [prefix, serial, h1, h2] = parts;
+    if (prefix !== LIC_PREFIX || !isValidLicenseSerial(serial)) return false;
+    if (!/^[A-F0-9]{4}$/.test(h1) || !/^[A-F0-9]{4}$/.test(h2)) return false;
+    const expected = crypto.createHmac('sha256', LIC_LEGACY_SECRET)
+        .update(`${prefix}-${serial}`)
+        .digest('hex')
+        .toUpperCase()
+        .slice(0, 8);
+    return (h1 + h2) === expected;
+}
+function validateLicenseKey(key) {
+    const raw = String(key || '').trim().replace(/\s/g, '');
+    return validateSignedLicenseKey(raw) || validateLegacyLicenseKey(raw);
 }
 function isLicenseActivated() {
     try {
@@ -552,7 +644,10 @@ ipcMain.handle('check-ollama', async (event) => {
     guardEvent(event);
     try {
         const res = await fetch(OLLAMA_PING, { signal: AbortSignal.timeout(3000) });
-        return res.ok;
+        if (!res.ok) return false;
+        const data = await res.json();
+        const models = Array.isArray(data?.models) ? data.models : [];
+        return models.some((item) => REQUIRED_MODELS.has(item?.name) || REQUIRED_MODELS.has(item?.model));
     } catch {
         return false;
     }
@@ -570,13 +665,15 @@ ipcMain.on('chat-stream', async (event, payload = {}) => {
     try {
         const finalModel = sanitizeModel(payload.model);
         const messages = sanitizeMessages(payload.messages);
+        const finalLang = ['ko', 'en'].includes(payload.lang) ? payload.lang : 'ko';
+        const systemPrompt = finalLang === 'en' ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT;
 
         const res = await fetch(OLLAMA_URL, {
             method : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model   : finalModel,
-                messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
+                messages: [{ role: 'system', content: systemPrompt }, ...messages],
                 stream  : true,
             }),
         });
@@ -697,9 +794,10 @@ ipcMain.on('uninstall', (event) => {
     if (!isTrustedSender(event)) return;
     const installDir = __dirname;
     const normalized = installDir.replace(/\//g, '\\').toLowerCase();
-    if (normalized !== 'c:\\essenceon') {
+    const devPaths = ['c:\\e-aichatbot_on', 'c:\\chatbot-onprem', 'c:\\chatbot'];
+    if (devPaths.includes(normalized)) {
         sendToRenderer('chat-error',
-            '⚠️ 언인스톨은 C:\\EssenceOn 에 정식 설치된 경우에만 사용 가능합니다.\n현재 경로: ' + installDir);
+            '⚠️ 개발 환경에서는 언인스톨을 사용할 수 없습니다.\n현재 경로: ' + installDir);
         return;
     }
     const tempScript = os.tmpdir() + '\\essenceon_remove.bat';
@@ -720,7 +818,9 @@ ipcMain.on('uninstall', (event) => {
         `if exist "%APPDATA%\\EssenceOn" rmdir /S /Q "%APPDATA%\\EssenceOn"`,
         // 바로가기
         `if exist "%USERPROFILE%\\Desktop\\Essence On.lnk" del "%USERPROFILE%\\Desktop\\Essence On.lnk"`,
+        `if exist "%PUBLIC%\\Desktop\\Essence On.lnk" del "%PUBLIC%\\Desktop\\Essence On.lnk"`,
         `if exist "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\EssenceOn" rmdir /S /Q "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\EssenceOn"`,
+        `if exist "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\EssenceOn" rmdir /S /Q "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\EssenceOn"`,
         // PATH 레지스트리에서 Ollama 경로 제거
         `powershell -NoProfile -Command "try{$p=[Environment]::GetEnvironmentVariable('PATH','User');if($p){$np=($p.Split(';')|Where-Object{$_ -notlike '*\\Ollama*'})-join';';[Environment]::SetEnvironmentVariable('PATH',$np,'User')}}catch{}"`,
         'del "%~f0"',
@@ -729,6 +829,68 @@ ipcMain.on('uninstall', (event) => {
     const { spawn } = require('child_process');
     spawn('cmd', ['/c', tempScript], { detached: true, stdio: 'ignore' }).unref();
     app.quit();
+});
+
+// ── Auto-update ─────────────────────────────────────────────────────
+function semverGt(a, b) {
+    const pa = String(a || '0').split('.').map(n => parseInt(n, 10) || 0);
+    const pb = String(b || '0').split('.').map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < 3; i++) {
+        if ((pa[i] || 0) > (pb[i] || 0)) return true;
+        if ((pa[i] || 0) < (pb[i] || 0)) return false;
+    }
+    return false;
+}
+
+ipcMain.handle('get-app-version', (event) => {
+    guardEvent(event);
+    return APP_VERSION;
+});
+
+ipcMain.handle('check-update', async (event) => {
+    guardEvent(event);
+    const settings = loadSettings();
+    const updateUrl = (settings.updateUrl || '').trim().replace(/\/$/, '');
+    if (!updateUrl) return { hasUpdate: false, noUrl: true };
+    try {
+        const res = await fetch(updateUrl + '/update.json', { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return { hasUpdate: false, error: `HTTP ${res.status}` };
+        const info = await res.json();
+        if (!info?.version) return { hasUpdate: false };
+        const hasUpdate = semverGt(info.version, APP_VERSION);
+        return { hasUpdate, version: info.version, currentVersion: APP_VERSION, notes: info.notes || '', files: info.files || [] };
+    } catch (e) {
+        return { hasUpdate: false, error: e.message };
+    }
+});
+
+ipcMain.handle('apply-update', async (event, info = {}) => {
+    guardEvent(event);
+    const settings = loadSettings();
+    const updateUrl = (settings.updateUrl || '').trim().replace(/\/$/, '');
+    if (!updateUrl) return { success: false, error: 'No update URL configured' };
+    const files = (info.files || []).filter(f => /^[a-zA-Z0-9_.-]+\.(js|html|json)$/.test(f));
+    if (!files.length) return { success: false, error: 'No valid files in update' };
+    const tmpDir = path.join(os.tmpdir(), 'essenceon-update');
+    ensureDir(tmpDir);
+    try {
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            sendToRenderer('update-progress', { file, index: i + 1, total: files.length });
+            const res = await fetch(`${updateUrl}/${file}`, { signal: AbortSignal.timeout(60000) });
+            if (!res.ok) throw new Error(`Failed to download ${file}: HTTP ${res.status}`);
+            const buf = Buffer.from(await res.arrayBuffer());
+            fs.writeFileSync(path.join(tmpDir, file), buf);
+        }
+        for (const file of files) {
+            fs.copyFileSync(path.join(tmpDir, file), path.join(__dirname, file));
+        }
+        sendToRenderer('update-progress', { done: true });
+        setTimeout(() => { app.relaunch(); app.quit(); }, 1500);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
 });
 
 ipcMain.handle('get-auto-launch', (event) => { guardEvent(event); return app.getLoginItemSettings().openAtLogin; });

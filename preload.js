@@ -31,6 +31,10 @@ contextBridge.exposeInMainWorld('aria', {
     mouseEnterRobot  : ()    => ipcRenderer.send('mouse-enter-robot'),
     mouseLeaveRobot  : ()    => ipcRenderer.send('mouse-leave-robot'),
     invalidateWindow : ()    => ipcRenderer.send('invalidate-window'),
+    getAppVersion   : ()     => ipcRenderer.invoke('get-app-version'),
+    checkUpdate     : ()     => ipcRenderer.invoke('check-update'),
+    applyUpdate     : (info) => ipcRenderer.invoke('apply-update', info),
+    onUpdateProgress: (cb)   => ipcRenderer.on('update-progress', (_, p) => cb(p)),
     offListeners: ()         => {
         ipcRenderer.removeAllListeners('chat-chunk');
         ipcRenderer.removeAllListeners('chat-done');
