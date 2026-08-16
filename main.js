@@ -338,11 +338,19 @@ function validateLegacyLicenseKey(raw) {
         .slice(0, 8);
     return (h1 + h2) === expected;
 }
+// 신규 등록은 Ed25519 서명 키(EON-0001.<서명>)만 받는다.
+// 구형 HMAC 키(EON-0001-XXXX-XXXX)는 시크릿이 소스에 들어 있어 위조가 가능하므로,
+// 등록 경로에서는 ESSENCEON_ALLOW_LEGACY_LICENSE_ACTIVATION=1 일 때만 열어 준다.
 function validateLicenseKey(key, options = {}) {
     const raw = String(key || '').trim().replace(/\s/g, '');
     return validateSignedLicenseKey(raw) ||
         ((options.allowLegacy || ALLOW_LEGACY_LICENSE_ACTIVATION) && validateLegacyLicenseKey(raw));
 }
+
+// ★ allowLegacy: true 를 지우지 말 것.
+//   이미 배포된 설치본의 license.json 에는 구형 HMAC 키가 들어 있다.
+//   이 예외를 없애면 기존 고객 PC가 전부 라이선스 창으로 튕긴다.
+//   구형 키를 정리하려면 먼저 신규 서명 키를 재발급해 배포한 뒤에 제거해야 한다.
 function isLicenseActivated() {
     try {
         const data = JSON.parse(fs.readFileSync(licensePath(), 'utf8'));
