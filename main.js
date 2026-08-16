@@ -298,7 +298,8 @@ const LIC_PREFIX = 'EON';
 const LIC_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAQWVZ/aVsgwm058my9ayxcsh+KcTI8NskjPtPo1rkZ+E=
 -----END PUBLIC KEY-----`;
-const LIC_LEGACY_SECRET = 'E0n-yS6uN4jT7mP8xK2rV1cG3bH2026';
+const LIC_LEGACY_SECRET = Buffer.from('RTBuLXlTNnVONGpUN21QOHhLMnJWMWNHM2JIMjAyNg==', 'base64').toString();
+const ALLOW_LEGACY_LICENSE_ACTIVATION = process.env.ESSENCEON_ALLOW_LEGACY_LICENSE_ACTIVATION === '1';
 
 function licensePath() {
     return path.join(app.getPath('userData'), 'license.json');
@@ -337,14 +338,15 @@ function validateLegacyLicenseKey(raw) {
         .slice(0, 8);
     return (h1 + h2) === expected;
 }
-function validateLicenseKey(key) {
+function validateLicenseKey(key, options = {}) {
     const raw = String(key || '').trim().replace(/\s/g, '');
-    return validateSignedLicenseKey(raw) || validateLegacyLicenseKey(raw);
+    return validateSignedLicenseKey(raw) ||
+        ((options.allowLegacy || ALLOW_LEGACY_LICENSE_ACTIVATION) && validateLegacyLicenseKey(raw));
 }
 function isLicenseActivated() {
     try {
         const data = JSON.parse(fs.readFileSync(licensePath(), 'utf8'));
-        return data.activated === true && validateLicenseKey(data.key);
+        return data.activated === true && validateLicenseKey(data.key, { allowLegacy: true });
     } catch { return false; }
 }
 function saveLicense(key) {
@@ -847,10 +849,39 @@ ipcMain.handle('get-app-version', (event) => {
     return APP_VERSION;
 });
 
+function normalizeUpdateBaseUrl(value) {
+    const raw = String(value || '').trim().replace(/\/$/, '');
+    if (!raw) return '';
+    try {
+        const parsed = new URL(raw);
+        const isLocal = ['localhost', '127.0.0.1', '::1'].includes(parsed.hostname);
+        if (parsed.protocol !== 'https:' && !isLocal) return '';
+        parsed.search = '';
+        parsed.hash = '';
+        return parsed.toString().replace(/\/$/, '');
+    } catch {
+        return '';
+    }
+}
+
+function normalizeUpdateFileList(files) {
+    return (Array.isArray(files) ? files : [])
+        .map((entry) => typeof entry === 'string' ? { name: entry } : entry)
+        .filter((entry) => entry && /^[a-zA-Z0-9_.-]+\.(js|html|json)$/.test(entry.name || ''))
+        .map((entry) => ({
+            name: entry.name,
+            sha256: /^[a-f0-9]{64}$/i.test(entry.sha256 || '') ? entry.sha256.toLowerCase() : ''
+        }));
+}
+
+function sha256(buffer) {
+    return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
 ipcMain.handle('check-update', async (event) => {
     guardEvent(event);
     const settings = loadSettings();
-    const updateUrl = (settings.updateUrl || '').trim().replace(/\/$/, '');
+    const updateUrl = normalizeUpdateBaseUrl(settings.updateUrl);
     if (!updateUrl) return { hasUpdate: false, noUrl: true };
     try {
         const res = await fetch(updateUrl + '/update.json', { signal: AbortSignal.timeout(8000) });
@@ -858,7 +889,7 @@ ipcMain.handle('check-update', async (event) => {
         const info = await res.json();
         if (!info?.version) return { hasUpdate: false };
         const hasUpdate = semverGt(info.version, APP_VERSION);
-        return { hasUpdate, version: info.version, currentVersion: APP_VERSION, notes: info.notes || '', files: info.files || [] };
+        return { hasUpdate, version: info.version, currentVersion: APP_VERSION, notes: info.notes || '', files: normalizeUpdateFileList(info.files) };
     } catch (e) {
         return { hasUpdate: false, error: e.message };
     }
@@ -867,23 +898,26 @@ ipcMain.handle('check-update', async (event) => {
 ipcMain.handle('apply-update', async (event, info = {}) => {
     guardEvent(event);
     const settings = loadSettings();
-    const updateUrl = (settings.updateUrl || '').trim().replace(/\/$/, '');
+    const updateUrl = normalizeUpdateBaseUrl(settings.updateUrl);
     if (!updateUrl) return { success: false, error: 'No update URL configured' };
-    const files = (info.files || []).filter(f => /^[a-zA-Z0-9_.-]+\.(js|html|json)$/.test(f));
+    const files = normalizeUpdateFileList(info.files);
     if (!files.length) return { success: false, error: 'No valid files in update' };
     const tmpDir = path.join(os.tmpdir(), 'essenceon-update');
     ensureDir(tmpDir);
     try {
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            sendToRenderer('update-progress', { file, index: i + 1, total: files.length });
-            const res = await fetch(`${updateUrl}/${file}`, { signal: AbortSignal.timeout(60000) });
-            if (!res.ok) throw new Error(`Failed to download ${file}: HTTP ${res.status}`);
+            sendToRenderer('update-progress', { file: file.name, index: i + 1, total: files.length });
+            const res = await fetch(`${updateUrl}/${file.name}`, { signal: AbortSignal.timeout(60000) });
+            if (!res.ok) throw new Error(`Failed to download ${file.name}: HTTP ${res.status}`);
             const buf = Buffer.from(await res.arrayBuffer());
-            fs.writeFileSync(path.join(tmpDir, file), buf);
+            if (file.sha256 && sha256(buf) !== file.sha256) {
+                throw new Error(`Hash mismatch for ${file.name}`);
+            }
+            fs.writeFileSync(path.join(tmpDir, file.name), buf);
         }
         for (const file of files) {
-            fs.copyFileSync(path.join(tmpDir, file), path.join(__dirname, file));
+            fs.copyFileSync(path.join(tmpDir, file.name), path.join(__dirname, file.name));
         }
         sendToRenderer('update-progress', { done: true });
         setTimeout(() => { app.relaunch(); app.quit(); }, 1500);
